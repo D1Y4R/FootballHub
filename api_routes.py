@@ -11,7 +11,6 @@ from flask import Blueprint, jsonify, request, current_app
 # Use current_app to avoid circular imports
 from flask import current_app
 
-# NumPy değerlerini Python'a dönüştürmek için yardımcı fonksiyon
 def numpy_to_python(obj):
     """NumPy değerlerini Python'a dönüştür (JSON serileştirme için)"""
     if isinstance(obj, np.integer):
@@ -43,8 +42,6 @@ API_FOOTBALL_KEY = os.environ.get('APIFOOTBALL_API_KEY', 'aa2b2ffba35e4c25666961
 api_v3_bp = Blueprint('api_v3', __name__, url_prefix='/api/v3')
 
 # Tahmin önbelleğini temizleme API'si
-# API blueprint erişimi için eski versiyonu çıkarıyoruz, çünkü aşağıda yenisi tanımlanmış
-# Bu fonksiyon API Blueprint'i üzerinden erişilen eski versiyondur
 # Yeni sürüm 995-1031 satırları arasındadır
 @api_v3_bp.route('/clear-prediction-cache', methods=['GET'])
 def clear_prediction_cache_v3():  # Fonksiyon ismi değiştirildi
@@ -175,10 +172,8 @@ def get_football_data_fixtures(date):
 
         response = requests.get(url, params=params)
         if response.status_code == 200 and isinstance(response.json(), list) and len(response.json()) > 0:
-            # API-Football verisi başarıyla alındı, converter'a gönder
             return convert_apifootball_to_standard(response.json())
 
-        # API-Football çalışmazsa football-data.org ile devam et
         url = "https://api.football-data.org/v4/matches"
         headers = {'X-Auth-Token': FOOTBALL_DATA_API_KEY}
         params = {"date": date}
@@ -186,7 +181,6 @@ def get_football_data_fixtures(date):
         response = requests.get(url, headers=headers, params=params)
         data = response.json()
 
-        # Convert football-data.org format to api-football format
         converted_data = {
             "response": []
         }
@@ -231,9 +225,6 @@ def get_football_data_fixtures(date):
         logger.error(f"Error getting football-data fixtures: {str(e)}")
         return jsonify({"errors": True, "message": str(e)}), 500
 
-
-
-
 @api_v3_bp.route('/matches/half-time-stats/<int:match_id>', methods=['GET']) 
 @api_cache(timeout=3600)  # 1 saat önbellekleme (oynanan maç sonuçları değişmez)
 def get_half_time_stats(match_id):
@@ -276,7 +267,6 @@ def get_half_time_stats(match_id):
                 "team_away_badge": ""
             }
             
-            # Bilgilendirici bir 202 yanıtı döndür (veri yok ama istek kabul edildi)
             result = {
                 "match_id": match_id,
                 "match_date": match_data.get('match_date', ''),
@@ -301,7 +291,6 @@ def get_half_time_stats(match_id):
             }
             return jsonify(result), 202  # 202 Accepted
             
-        # Veri varsa, her iki takımın ID'lerini al ve yarı istatistiklerini öyle göster
         match_data = data[0]  # İlk eleman maç verilerini içerir
         
         # Takım ID'lerini çıkar
@@ -310,7 +299,6 @@ def get_half_time_stats(match_id):
         
         logger.info(f"Takım ID'leri alındı, her iki takımın ayrı ayrı istatistikleri gösterilecek: home_team_id={home_team_id}, away_team_id={away_team_id}")
         
-        # Şimdi her iki takımın son 21 maçını takım istatistiklerinden getir
         if home_team_id and home_team_id != '0' and away_team_id and away_team_id != '0':
             # Takım endpointine git
             return jsonify({
@@ -324,14 +312,12 @@ def get_half_time_stats(match_id):
                 "away_team_endpoint": f"/api/v3/team/half-time-stats/{away_team_id}"
             })
         
-        # İlk yarı ve ikinci yarı skorları çıkar (bu eskiden kalma kod, şimdi takım ID'leri ile çalışmaya öncelik vermeliyiz)
         ht_home_score = match_data.get('match_hometeam_halftime_score', 0)
         ht_away_score = match_data.get('match_awayteam_halftime_score', 0)
         
         ft_home_score = match_data.get('match_hometeam_score', 0)
         ft_away_score = match_data.get('match_awayteam_score', 0)
         
-        # İkinci yarı skorlarını hesapla (tam skor - ilk yarı skoru)
         second_half_home = int(ft_home_score) - int(ht_home_score) if ft_home_score is not None and ht_home_score is not None else 0
         second_half_away = int(ft_away_score) - int(ht_away_score) if ft_away_score is not None and ht_away_score is not None else 0
         
@@ -438,7 +424,6 @@ def get_team_matches(team_id):
             team_id_value = team_id if isinstance(team_id, int) else str(team_id)
             logger.warning(f"Invalid team_id={team_id_value} provided to get_team_matches")
             
-            # Boş ama geçerli bir yanıt döndür - hata yerine varsayılan değerler kullan
             return jsonify({
                 "team_id": str(team_id_value),
                 "team_name": "Bilinmeyen Takım",
@@ -543,7 +528,6 @@ def get_team_matches(team_id):
             
             # Tüm maçları işle
             for match in sorted_data:
-                # Takımın ev sahibi mi yoksa deplasman mı olduğunu belirle
                 is_home = str(match.get('match_hometeam_id', '')) == str(team_id)
                 team_goals = int(match.get('match_hometeam_score', 0)) if is_home else int(match.get('match_awayteam_score', 0))
                 opponent_goals = int(match.get('match_awayteam_score', 0)) if is_home else int(match.get('match_hometeam_score', 0))
@@ -573,7 +557,6 @@ def get_team_matches(team_id):
                 
                 all_match_data.append(formatted_match)
                 
-                # Maç durumu kontrolü - yalnızca tamamlanmış maçları hesapla
                 match_status = match.get('match_status', '')
                 if match_status == 'Finished':
                     team_stats["finished_matches"] += 1
@@ -702,7 +685,6 @@ def clear_prediction_cache():
         except ImportError:
             logger.warning("Main predictor'a erişilemedi, muhtemelen ana rotalardan çağrıldı")
         
-        # API yollarındaki global match_predictor'ı sıfırla (eğer tanımlıysa)
         global match_predictor
         try:
             match_predictor = MatchPredictor()
@@ -756,12 +738,10 @@ def get_team_stats_api(team_id):
             # Tahmin önbelleğini kontrol et
             cache_data = predictor.load_cache()
             
-            # Tüm maçları dön ve belirtilen takım ID'sini içeren maçları bul
             team_matches = []
             team_name = None
             
             for key, match_data in cache_data.items():
-                # Maç anahtarını analiz et (genellikle "home_team_id-away_team_id" formatındadır)
                 match_teams = key.split('-')
                 if len(match_teams) == 2:
                     home_id, away_id = match_teams
@@ -805,7 +785,6 @@ def get_team_stats_api(team_id):
                                 'is_home': is_home
                             })
             
-            # Eğer önbellekte veriler bulunduysa, doğrudan döndür
             if team_matches:
                 logger.info(f"Takım {team_id} için önbellekten {len(team_matches)} maç bulundu")
                 return jsonify(team_matches)
@@ -817,7 +796,6 @@ def get_team_stats_api(team_id):
         api_key = os.environ.get('API_FOOTBALL_KEY', '39bc8dd65153ff5c7c0f37b4939009de04f4a70c593ee1aea0b8f70dd33268c0')
         url = "https://apiv3.apifootball.com/"
         
-        # Son 10 maçı çek (günümüzden 3 yıl öncesine kadar)
         three_years_ago = (datetime.now() - timedelta(days=1095)).strftime('%Y-%m-%d')
         
         params = {
@@ -831,7 +809,6 @@ def get_team_stats_api(team_id):
         response = requests.get(url, params=params)
         if response.status_code != 200:
             logger.error(f"API yanıt hatası {response.status_code}: Takım: {team_id}")
-            # İlk API başarısız olduğunda, backup API'yi deneyelim
             try:
                 return get_team_stats_backup(team_id)
             except Exception as e2:
@@ -886,7 +863,6 @@ def get_team_stats_api(team_id):
         
     except Exception as e:
         logger.error(f"Takım istatistikleri alınırken hata: {str(e)}")
-        # Ana API ile bir hata olursa, backup API'yi deneyelim
         try:
             return get_team_stats_backup(team_id)
         except Exception as e2:
@@ -949,7 +925,6 @@ def get_team_stats_backup(team_id):
         api_key = os.environ.get('FOOTBALL_DATA_API_KEY', '85c1a3c16af54ce687b76479261b6e73')
         headers = {'X-Auth-Token': api_key}
         
-        # Football Data API kullanarak takımın son maçlarını al
         url = f"https://api.football-data.org/v4/teams/{team_id}/matches?limit=10"
         response = requests.get(url, headers=headers)
         
@@ -1028,7 +1003,6 @@ def api_v3_predict_match(home_team_id, away_team_id):
         force_update = request.args.get('force_update', 'false').lower() == 'true'
         use_goal_trend = request.args.get('use_goal_trend', 'true').lower() == 'true'  # Varsayılan olarak aktif
         
-        # İlk yarı/maç sonu tahminleri için takım-spesifik ayarlamaları alalım
         team_adjustments = None
         try:
             # Takım-spesifik modelleri yükle
@@ -1047,9 +1021,7 @@ def api_v3_predict_match(home_team_id, away_team_id):
         except Exception as e:
             logger.warning(f"Ana tahmin için takım-spesifik ayarlamalar yapılırken hata: {str(e)}")
             
-        # Tahmin fonksiyonunu çağır (Gol Trend İvmesi analizi parametresi ile)
         try:
-            # Gol Trend İvmesi analizini kontrol parametresi ile yapılandır
             prediction = predictor.predict_match(
                 home_team_id, away_team_id, 
                 home_name, away_name, 
@@ -1069,29 +1041,23 @@ def api_v3_predict_match(home_team_id, away_team_id):
             }), 500
             
         if prediction:
-            # Simplify prediction data by removing complex card and corner predictions
             # to ensure lighter response payload
             if 'predictions' in prediction and 'betting_predictions' in prediction['predictions']:
                 betting_predictions = prediction['predictions']['betting_predictions']
-                # Remove corner and card predictions to reduce complexity
                 if 'cards_over_3_5' in betting_predictions:
                     del betting_predictions['cards_over_3_5']
                 if 'corners_over_9_5' in betting_predictions:
                     del betting_predictions['corners_over_9_5']
                 
-                # İY/MS tahminlerini en yüksek olasılıklı tahminden çıkar
-                # Çok önemli: İY/MS tahmini half_time_full_time market'ında saklanır ve
                 # most_confident_bet'ten kaldırılmalıdır
                 # HER DURUMDA kontrol edelim ki tam emin olalım 
                 if 'most_confident_bet' in prediction['predictions']:
                     
                     logger.info(f"İY/MS tahmini en yüksek olasılıklı tahminden kaldırılıyor: {prediction['predictions']['most_confident_bet']}")
                     
-                    # En yüksek olasılıklı alternatif tahmini bul (İY/MS hariç)
                     next_best_bet = None
                     next_best_prob = 0
                     
-                    # İY/MS ve corner/card tahminleri hariç diğer tahminlere bak
                     for market, bet_data in betting_predictions.items():
                         if market != 'half_time_full_time' and \
                            market != 'corners_over_9_5' and \
@@ -1106,7 +1072,6 @@ def api_v3_predict_match(home_team_id, away_team_id):
                             }
                             next_best_prob = bet_data['probability']
                     
-                    # Alternatif tahmin bulunamazsa maç sonucu tahminini kullan
                     if not next_best_bet:
                         # Maç sonucu olasılıklarını karşılaştır
                         home_prob = prediction['predictions'].get('home_win_probability', 0)
@@ -1133,13 +1098,11 @@ def api_v3_predict_match(home_team_id, away_team_id):
                     prediction['predictions']['most_confident_bet'] = next_best_bet
                     logger.info(f"En yüksek olasılıklı tahmin şuna değiştirildi: {next_best_bet}")
                     
-                    # Eğer exact_score ve most_likely_outcome varsa, tutarlı olduklarından emin ol
                     if 'exact_score' in prediction['predictions']:
                         exact_score = prediction['predictions']['exact_score']
                         # Kesin skordan sonuç çıkarma
                         from match_prediction import MatchPredictor
                         predictor = MatchPredictor()
-                        # Object formatındaki exact_score için prediction anahtarını kontrol et
                         if isinstance(exact_score, dict) and 'prediction' in exact_score:
                             exact_score_value = exact_score['prediction']
                         else:
@@ -1155,7 +1118,6 @@ def api_v3_predict_match(home_team_id, away_team_id):
                             
                             if 'match_outcome' in prediction['predictions']:
                                 prediction['predictions']['match_outcome'] = derived_outcome
-            # Normalize the response structure for frontend compatibility
             normalized_response = {
                 "home_win": prediction.get('predictions', {}).get('home_win_probability', 0),
                 "draw": prediction.get('predictions', {}).get('draw_probability', 0), 
@@ -1181,9 +1143,7 @@ def api_v3_predict_match(home_team_id, away_team_id):
             return jsonify({"error": "Tahmin yapılamadı. Yeterli veri bulunmuyor."}), 400
     except Exception as e:
         logger.error(f"API v3 tahmin yapılırken hata: {str(e)}", exc_info=True)
-        # Kullanıcıya daha anlaşılır ve güvenli bir hata mesajı döndür
         error_message = "Tahmin işlemi sırasında teknik bir hata oluştu, lütfen daha sonra tekrar deneyin"
-        # Değişken kontrolü yaparak daha güvenli bir yaklaşım
         try:
             home_name_val = home_name if 'home_name' in locals() else f"Takım {home_team_id}"
             away_name_val = away_name if 'away_name' in locals() else f"Takım {away_team_id}"
@@ -1217,10 +1177,8 @@ def get_htft_prediction(home_team_id, away_team_id):
         logger.warning(f"Geçersiz deplasman takım ID: {away_team_id}")
         away_team_id = str(away_team_id or "0")
         
-    # URL parametrelerini fonksiyon başlangıcında tanımla (tüm fonksiyon kapsamında kullanılabilir)
     home_name = request.args.get('home_name', f'Takım {home_team_id}')
     away_name = request.args.get('away_name', f'Takım {away_team_id}')
-    # Yeni eklenen parametre: Önbelleği atlayıp zorla güncel tahmin oluşturma 
     force_update = request.args.get('force_update', 'false').lower() == 'true'
     
     # Talep edilen hesaplama yöntemi
@@ -1233,19 +1191,15 @@ def get_htft_prediction(home_team_id, away_team_id):
         global_outcome_str = request.args.get('global_outcome', None)  # Ana tahmin butonundan gelen sonuç (string)
         global_outcome = None
         
-
-        
         # String'i JSON'a çevir (eğer var ise)
         if global_outcome_str:
             try:
                 import json
                 global_outcome = json.loads(global_outcome_str)
 
-                
                 logger.info(f"Global outcome JSON başarıyla parse edildi")
             except Exception as e:
                 logger.warning(f"Global outcome JSON parse hatası: {str(e)}")
-                # Parse hatası durumunda manuel bir global_outcome objesi oluştur
                 global_outcome = {
                     "score_prediction": {
                         "beklenen_home_gol": 1.5,
@@ -1253,10 +1207,8 @@ def get_htft_prediction(home_team_id, away_team_id):
                     }
                 }
         else:
-            # Global outcome yoksa, API'den tahmin bilgilerini alalım
             try:
                 from main import predictor
-                # Tahmin butonundan verileri almak için API çağrısı yap (Gol Trend İvmesi analizini kullanarak)
                 basic_prediction = predictor.predict_match(
                     home_team_id, away_team_id, 
                     home_name, away_name,
@@ -1269,7 +1221,6 @@ def get_htft_prediction(home_team_id, away_team_id):
                     
                     logger.info(f"Ana tahmin modülünden gol beklentileri alındı: Ev={expected_home_goals:.2f}, Deplasman={expected_away_goals:.2f}")
                     
-                    # Tahmin butonundan alınan gol beklentileri ile global_outcome oluştur
                     global_outcome = {
                         "expected_home_goals": expected_home_goals,
                         "expected_away_goals": expected_away_goals,
@@ -1279,7 +1230,6 @@ def get_htft_prediction(home_team_id, away_team_id):
                         }
                     }
                 else:
-                    # Tahmin bilgisi yoksa varsayılan değerlerle devam et
                     global_outcome = {
                         "expected_home_goals": 1.5,
                         "expected_away_goals": 1.0,
@@ -1302,10 +1252,7 @@ def get_htft_prediction(home_team_id, away_team_id):
         
         logger.info(f"İY/MS tahmini isteniyor: {home_name} vs {away_name}")
         
-        # Her iki takımın da ilk yarı/ikinci yarı istatistiklerini almamız gerekiyor
-        # /api/v3/team/half-time-stats/{team_id} endpointini kullanıyoruz
         
-        # Sürpriz butonu işlevselliği kaldırıldı - artık sadece takım isimleri döndürülüyor
         home_team_data = {
             "id": home_team_id,
             "name": home_name,
@@ -1318,7 +1265,6 @@ def get_htft_prediction(home_team_id, away_team_id):
             "stats": {"message": "Sürpriz butonu kaldırıldı"}
         }
         
-        # Takım istatistiklerini kullan, artık home_team_data ve away_team_data'dan alıyoruz
         home_team_stats = home_team_data.get('stats', {})
         away_team_stats = away_team_data.get('stats', {})
         
@@ -1330,12 +1276,10 @@ def get_htft_prediction(home_team_id, away_team_id):
         
         logger.info(f"Form verileri elde edildi: Ev sahibi form={home_team_form is not None}, Deplasman form={away_team_form is not None}")
         
-        # Takım-spesifik modellerden ayarlamalar için TeamSpecificPredictor sınıfı
         team_specific_predictor = None
         team_adjustments = None
         
         try:
-            # team_specific_models modülünden TeamSpecificPredictor'ı içe aktar
             from team_specific_models import TeamSpecificPredictor
             team_specific_predictor = TeamSpecificPredictor()
             
@@ -1348,22 +1292,18 @@ def get_htft_prediction(home_team_id, away_team_id):
         except Exception as e:
             logger.warning(f"Takım-spesifik modellerden ayarlamalar yapılırken hata: {str(e)}")
             
-        # Tahmin butonundan gelen beklenen gol değerlerini al (eğer mevcutsa)
         expected_home_goals = None
         expected_away_goals = None
         
-        # Geliştirilmiş beklenen gol ve sürpriz butonu kontrolü
         is_surprise_button = False
         match_outcome = None
         
         if global_outcome:
             if isinstance(global_outcome, dict):
 
-                
                 # Maç sonucu tahmini
                 match_outcome = global_outcome.get("match_outcome")
                 
-                # Beklenen gol değerleri al (farklı formatları dene)
                 expected_home_goals = global_outcome.get("expected_home_goals")
                 expected_away_goals = global_outcome.get("expected_away_goals")
                 
@@ -1373,7 +1313,6 @@ def get_htft_prediction(home_team_id, away_team_id):
                 if expected_away_goals is None:
                     expected_away_goals = global_outcome.get("score_prediction", {}).get("beklenen_away_gol")
                 
-                # JavaScript'ten gelen gol değerleri string olabilir, float'a çevir
                 if expected_home_goals is not None and isinstance(expected_home_goals, str):
                     try:
                         expected_home_goals = float(expected_home_goals)
@@ -1407,7 +1346,6 @@ def get_htft_prediction(home_team_id, away_team_id):
             # Deplasman avantajlı düşük skorlu maç mı?
             if expected_away_goals > expected_home_goals + 0.3 and total_expected_goals < 2.0:
                 logger.info(f"DEPLASMAN AVANTAJLI DÜŞÜK SKORLU MAÇ: Ev={expected_home_goals:.2f}, Deplasman={expected_away_goals:.2f}")
-                # global_outcome nesnesine maç sonucu ekle (halfTime_fullTime_predictor için)
                 if isinstance(global_outcome, dict) and match_outcome is None:
                     global_outcome["match_outcome"] = "AWAY_WIN"
         
@@ -1418,17 +1356,13 @@ def get_htft_prediction(home_team_id, away_team_id):
             "error": "İY/MS tahmin modülü sistemden kaldırılmıştır"
         }
         
-        # Diğer maç bilgilerini ekle (halihazırda başlamış maç ise)
         scores = {
             "half_time": {"home": 0, "away": 0},
             "full_time": {"home": 0, "away": 0},
             "second_half": {"home": 0, "away": 0}
         }
         
-
-        
         # Response objelerini JSON'a dönüştürelim
-        # Eğer home_team_stats ve away_team_stats Response objesi ise, düzeltelim
         try:
             # Önce home_team_stats kontrolü
             if hasattr(home_team_stats, 'json'):
@@ -1498,8 +1432,6 @@ def get_htft_prediction(home_team_id, away_team_id):
         
     except Exception as e:
         logger.error(f"İY/MS tahmini oluşturulurken hata: {str(e)}", exc_info=True)
-        # home_name ve away_name değişkenleri zaten fonksiyon başında tanımlandı
-        # Böylece exception durumunda da erişilebilir olacak
         
         return jsonify({
             "error": f"İY/MS tahmini oluşturulurken hata: {str(e)}",
@@ -1559,7 +1491,6 @@ def team_form_analysis(team_id):
         }
         
         try:
-            # Son 5 ve 10 maçtaki form istatistiklerini hesapla
             if 'recent_match_data' in team_form:
                 recent_matches = team_form['recent_match_data'][:10]
                 
@@ -1626,7 +1557,6 @@ def team_form_analysis(team_id):
         }
         
         try:
-            # Ev sahibi ve deplasman gol istatistiklerini hesapla
             home_matches = [m for m in team_form.get('recent_match_data', []) if m.get('is_home', False)]
             away_matches = [m for m in team_form.get('recent_match_data', []) if not m.get('is_home', False)]
             
@@ -1740,7 +1670,6 @@ def advanced_predictions(home_team_id, away_team_id):
         logger.error(f"Error getting advanced predictions: {str(e)}")
         return jsonify({"error": str(e)}), 500
         
-# Model Doğrulama ve Değerlendirme için yeni API rotaları
 @api_v3_bp.route('/validation/cross-validate', methods=['GET', 'POST'])
 def run_cross_validation():
     """Çapraz doğrulama gerçekleştirme API endpoint'i"""
@@ -2048,7 +1977,6 @@ def get_feature_importance():
         
         # Model tipine göre işlem yap
         if model_type == 'ensemble':
-            # Ensemble model oluştur ve çapraz doğrulama ile eğit
             ensemble_result = model_validator.ensemble_cross_validate(
                 ensemble_type="voting",  # Küçük veri setleri için voting ensemble kullan
                 k_folds=k_folds
@@ -2071,7 +1999,6 @@ def get_feature_importance():
                 away_model.fit(X_away, y_away)
                 
                 # Feature importance analizi
-                # Sadece base modellerin feature importance değerleri çıkarılabilir
                 if hasattr(home_model, 'estimators_'):
                     home_importances = {}
                     away_importances = {}
@@ -2142,15 +2069,12 @@ def hyperparameter_optimization():
     try:
         from main import model_validator
         
-        # POST verisini al - hata durumunda varsayılan değerler kullan
         try:
             data = request.get_json(silent=True) or {}
         except Exception as json_err:
             logger.error(f"JSON verisi işlenirken hata: {str(json_err)}")
-            # Bağlantı veya istemci hatası durumunda varsayılan değerler kullan
             data = {}
         
-        # Parametreleri al - Daha az hesaplama gerektiren değerler kullan
         model_type = data.get('model_type', 'rf')
         cv = data.get('cv', 3)  # 5 yerine 3 kat çapraz doğrulama (daha hızlı)
         scoring = data.get('scoring', 'neg_mean_squared_error')
