@@ -6,6 +6,14 @@ import socket
 from datetime import datetime, timedelta
 import pytz
 
+# Import optimized modules first
+from cache_optimizer import cache_manager, cache_metrics
+from optimized_http_client import http_client, api_manager
+from lazy_ml_imports import initialize_lazy_ml_imports
+
+# Initialize lazy loading for better performance
+ml_imports = initialize_lazy_ml_imports(preload_critical=True)
+
 # Configure C++ library path for pandas/numpy dependencies
 os.environ['LD_LIBRARY_PATH'] = '/home/runner/.local/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu:' + os.environ.get('LD_LIBRARY_PATH', '')
 from flask import Flask, render_template, jsonify, request, flash, redirect, url_for
@@ -73,7 +81,8 @@ def get_matches(selected_date=None):
         logger.info(f"Sending API request to {url} with params: {params}")
 
         logger.info(f"Fetching matches for date: {selected_date}")
-        response = requests.get(url, params=params)
+        # Use optimized HTTP client with timeout and retry logic
+        response = http_client.get(url, params=params)
         logger.debug(f"API Response status: {response.status_code}")
         logger.debug(f"API Response content: {response.content}") # Added logging for debugging
 
@@ -293,7 +302,8 @@ def team_stats(team_id):
         }
 
         logger.debug(f"Fetching team stats for team_id: {team_id}")
-        response = requests.get(url, params=params)
+        # Use optimized HTTP client with timeout and retry logic
+        response = http_client.get(url, params=params)
         logger.debug(f"API Response status: {response.status_code}")
 
         if response.status_code == 200:
@@ -350,7 +360,8 @@ def get_league_standings(league_id):
         headers = {'X-Auth-Token': api_key}
 
         logger.info(f"Making API request to {url}")
-        response = requests.get(url, headers=headers)
+        # Use optimized HTTP client with timeout and retry logic
+        response = http_client.get(url, headers=headers)
 
         # Yanıt başlıklarını kontrol et
         logger.info(f"API Response headers: {response.headers}")

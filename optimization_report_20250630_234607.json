@@ -1,0 +1,134 @@
+{
+  "optimization_summary": {
+    "start_time": "2025-06-30T23:46:02.247267",
+    "end_time": "2025-06-30T23:46:07.582902",
+    "total_duration_seconds": 5.335635423660278,
+    "optimizations_completed": [
+      "cache_optimization",
+      "frontend_optimization",
+      "ml_optimization",
+      "file_optimization",
+      "configuration"
+    ],
+    "total_optimizations": 5,
+    "errors_count": 0,
+    "errors": []
+  },
+  "performance_improvements": {
+    "cache_optimization": {
+      "original_size": 196736,
+      "compressed_size": 196736,
+      "compression_ratio": 1.0,
+      "entries_count": 64
+    },
+    "frontend_optimization": {
+      "css_bundle": "bundle.8eb2dd62.css",
+      "js_bundle": "bundle.8e98d608.js",
+      "critical_css": "critical.e46b461c.css",
+      "manifest": {
+        "bundle.css": "bundle.8eb2dd62.css",
+        "bundle.js": "bundle.8e98d608.js",
+        "critical.css": "critical.e46b461c.css"
+      },
+      "size_reduction": {
+        "original_size": 65761,
+        "bundled_size": 45100,
+        "reduction_ratio": 0.314183178479646
+      }
+    },
+    "ml_optimization": {
+      "lazy_loading_enabled": true,
+      "availability_status": {
+        "numpy": false,
+        "pandas": false,
+        "sklearn": false,
+        "tensorflow": false,
+        "sklearn.ensemble": false,
+        "sklearn.preprocessing": false,
+        "sklearn.model_selection": false,
+        "sklearn.metrics": false,
+        "tensorflow.keras": false
+      },
+      "load_time_seconds": 5.0067901611328125e-06,
+      "critical_modules_available": {
+        "numpy": false,
+        "pandas": false,
+        "sklearn": false,
+        "tensorflow": false
+      }
+    },
+    "file_optimization": {
+      "optimized_files": [
+        {
+          "file": "predictions_cache.json",
+          "original_size": 4611476,
+          "compressed_size": 301182,
+          "compression_ratio": 0.06531141005612953,
+          "savings_bytes": 4310294
+        },
+        {
+          "file": "model_validation.py",
+          "original_size": 161757,
+          "compressed_size": 31861,
+          "compression_ratio": 0.19696829194408896,
+          "savings_bytes": 129896
+        },
+        {
+          "file": "match_prediction.py",
+          "original_size": 386153,
+          "compressed_size": 70584,
+          "compression_ratio": 0.18278765152672646,
+          "savings_bytes": 315569
+        }
+      ],
+      "total_savings": 4755759
+    },
+    "configuration": {
+      "optimization_config_created": true,
+      "recommended_dependencies": [
+        "aiohttp>=3.8.0",
+        "psutil>=5.9.0",
+        "redis>=4.0.0"
+      ]
+    }
+  },
+  "before_stats": {
+    "timestamp": "2025-06-30T23:46:02.247270",
+    "file_sizes": {
+      "predictions_cache.json": 4611476,
+      "match_prediction.py": 386153,
+      "main.py": 43982,
+      "model_validation.py": 161757
+    },
+    "directory_sizes": {
+      "static": 151039,
+      "templates": 328613
+    }
+  },
+  "after_stats": {
+    "timestamp": "2025-06-30T23:46:07.582914",
+    "file_sizes": {
+      "predictions_cache.json": 4611476,
+      "match_prediction.py": 386153,
+      "main.py": 43982,
+      "model_validation.py": 161757
+    },
+    "directory_sizes": {
+      "static": 151039,
+      "templates": 328613
+    }
+  },
+  "size_reductions": {
+    "cache_compression": 0,
+    "frontend_bundling": 20661,
+    "file_compression": 4755759,
+    "total_savings_bytes": 4776420
+  },
+  "recommendations": [
+    "Consider implementing Redis for distributed caching in production",
+    "Monitor application performance with the included performance monitoring tools",
+    "Regularly run asset optimization to maintain performance gains",
+    "Consider implementing CDN for static assets in production",
+    "Monitor cache hit ratios and adjust cache size as needed"
+  ]
+}
