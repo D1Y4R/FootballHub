@@ -8,7 +8,7 @@ NEW_API_KEY="908ca1caaca4f5470f8c9d7f01a02d66fa06d149e77627804796c4f12568a485"
 OLD_API_KEY="aa2b2ffba35e4c25666961de6fd2f51419adeb32cc9d56394012f8e5067682df"
 
 echo "📦 1. Dependencies kuruluyor..."
-pip install flask gunicorn requests flask-caching pytz
+pip3 install --break-system-packages flask gunicorn requests flask-caching pytz
 
 echo "🔧 2. API key'ler güncelleniyor..."
 
@@ -47,9 +47,10 @@ echo "🎯 4. Environment variable ayarlama (opsiyonel):"
 echo "   export APIFOOTBALL_API_KEY=\"$NEW_API_KEY\""
 
 echo "🚀 5. Uygulamayı başlatmak için:"
-echo "   python start_codesandbox.py"
-echo "   # veya"
-echo "   python main.py"
+echo "   python3 main_simple.py    # <- ÖNERİLEN (hızlı)"
+echo "   python3 simple_app.py     # <- test için"
+echo "   python3 start_codesandbox.py"
+echo "   python3 main.py           # <- ağır versiyon"
 
 echo ""
 echo "✨ Kurulum tamamlandı!"
