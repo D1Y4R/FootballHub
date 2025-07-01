@@ -2,6 +2,7 @@ import logging
 import json
 import os
 import math
+import sys
 from datetime import datetime, timedelta
 import requests
 from fixed_safe_imports import safe_import_numpy, safe_import_pandas, safe_import_sklearn, safe_import_tensorflow
@@ -68,7 +69,9 @@ logger = logging.getLogger(__name__)
 
 class MatchPredictor:
     def __init__(self):
-        self.api_key = os.environ.get('APIFOOTBALL_PREMIUM_KEY', 'aa2b2ffba35e4c25666961de6fd2f51419adeb32cc9d56394012f8e5067682df')
+        self.api_key = os.environ.get('APIFOOTBALL_PREMIUM_KEY')
+        if not self.api_key:
+            logger.warning("APIFOOTBALL_PREMIUM_KEY environment variable not set. API functionality may be limited.")
         self.predictions_cache = {}
         self._cache_modified = False
         self.load_cache()
@@ -1767,7 +1770,14 @@ class MatchPredictor:
                 'APIkey': self.api_key
             }
 
-            response = requests.get(url, params=params)
+            try:
+                response = requests.get(url, params=params, timeout=30)
+            except requests.exceptions.Timeout:
+                logger.error(f"Request timeout for team {team_id}")
+                return self._generate_fallback_form_data(team_id)
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Request failed for team {team_id}: {str(e)}")
+                return self._generate_fallback_form_data(team_id)
 
             if response.status_code != 200:
                 logger.error(f"API hatası: {response.status_code}")
