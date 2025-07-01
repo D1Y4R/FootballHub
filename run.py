@@ -26,11 +26,8 @@ def load_env_file():
 load_env_file()
 
 # Check if API keys are loaded
-api_key = os.environ.get('APIFOOTBALL_API_KEY')
-if api_key:
-    print(f"✅ API Key loaded: {api_key[:20]}...")
-else:
-    print("❌ API Key not found")
+api_key = os.environ.get('APIFOOTBALL_API_KEY', '908ca1caaca4f5470f8c9d7f01a02d66fa06d149e77627804796c4f12568a485')
+print(f"✅ API Key loaded: {api_key[:20]}...")
 
 # Now import and run the main app
 if __name__ == '__main__':

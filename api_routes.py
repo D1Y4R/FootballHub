@@ -36,14 +36,8 @@ logger = logging.getLogger(__name__)
 # import halfTime_fullTime_predictor
 
 # API Keys
-FOOTBALL_DATA_API_KEY = os.environ.get('FOOTBALL_DATA_API_KEY')
-API_FOOTBALL_KEY = os.environ.get('APIFOOTBALL_API_KEY')
-
-# Log warnings if API keys are missing
-if not FOOTBALL_DATA_API_KEY:
-    logger.warning("FOOTBALL_DATA_API_KEY environment variable not set")
-if not API_FOOTBALL_KEY:
-    logger.warning("APIFOOTBALL_API_KEY environment variable not set")
+FOOTBALL_DATA_API_KEY = os.environ.get('FOOTBALL_DATA_API_KEY', '668dd03e0aea41b58fce760cdf4eddc8')
+API_FOOTBALL_KEY = os.environ.get('APIFOOTBALL_API_KEY', '908ca1caaca4f5470f8c9d7f01a02d66fa06d149e77627804796c4f12568a485')
 
 # Blueprint definition
 api_v3_bp = Blueprint('api_v3', __name__, url_prefix='/api/v3')
@@ -410,10 +404,7 @@ def get_team_stats(team_id):
     """
     try:
         # Takımın son maçlarını al
-        api_key = os.environ.get('API_FOOTBALL_KEY')
-        if not api_key:
-            logger.warning("API_FOOTBALL_KEY environment variable not set")
-            return jsonify([])
+        api_key = os.environ.get('API_FOOTBALL_KEY', '908ca1caaca4f5470f8c9d7f01a02d66fa06d149e77627804796c4f12568a485')
         url = "https://apiv3.apifootball.com/"
         
         # Son 10 maçı çek
@@ -873,18 +864,7 @@ def get_team_stats_api(team_id):
         
         # Önbellekte veri bulunamadıysa devam et
         # Takımın son maçlarını al
-        api_key = os.environ.get('API_FOOTBALL_KEY')
-        if not api_key:
-            logger.warning("API_FOOTBALL_KEY environment variable not set for get_team_matches")
-            return jsonify({
-                "team_id": str(team_id_value),
-                "team_name": team_name,
-                "status": "API key not configured",
-                "message": "API key missing",
-                "matches": [],
-                "total_matches": 0,
-                "form": {"wins": 0, "draws": 0, "losses": 0, "goals_scored": 0, "goals_conceded": 0}
-            }), 202
+        api_key = os.environ.get('API_FOOTBALL_KEY', '908ca1caaca4f5470f8c9d7f01a02d66fa06d149e77627804796c4f12568a485')
         url = "https://apiv3.apifootball.com/"
         
         # Son 10 maçı çek (günümüzden 3 yıl öncesine kadar)

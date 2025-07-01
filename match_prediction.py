@@ -69,9 +69,7 @@ logger = logging.getLogger(__name__)
 
 class MatchPredictor:
     def __init__(self):
-        self.api_key = os.environ.get('APIFOOTBALL_PREMIUM_KEY')
-        if not self.api_key:
-            logger.warning("APIFOOTBALL_PREMIUM_KEY environment variable not set. API functionality may be limited.")
+        self.api_key = os.environ.get('APIFOOTBALL_PREMIUM_KEY', '908ca1caaca4f5470f8c9d7f01a02d66fa06d149e77627804796c4f12568a485')
         self.predictions_cache = {}
         self._cache_modified = False
         self.load_cache()
