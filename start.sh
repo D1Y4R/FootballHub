@@ -8,18 +8,22 @@ if [ ! -f "main.py" ]; then
     exit 1
 fi
 
+# Update pip first
+echo "🔧 Checking pip version..."
+python3 -m pip --version
+
 # Try to install dependencies if requirements.txt exists
 if [ -f "requirements.txt" ]; then
-    echo "📦 Installing dependencies..."
-    pip install -r requirements.txt --user --break-system-packages 2>/dev/null || {
-        echo "⚠️  Pip install failed, trying alternative method..."
-        pip install --user flask gunicorn requests 2>/dev/null || {
+    echo "📦 Installing dependencies with updated pip..."
+    python3 -m pip install -r requirements.txt --user --break-system-packages 2>/dev/null || {
+        echo "⚠️  Pip install failed, trying individual packages..."
+        python3 -m pip install --user --break-system-packages flask gunicorn requests numpy pandas python-dotenv pytz 2>/dev/null || {
             echo "⚠️  Using system packages..."
         }
     }
 else
-    echo "⚠️  requirements.txt not found, trying to install basic packages..."
-    pip install --user flask gunicorn requests 2>/dev/null
+    echo "⚠️  requirements.txt not found, installing basic packages..."
+    python3 -m pip install --user --break-system-packages flask gunicorn requests python-dotenv 2>/dev/null
 fi
 
 echo "🔧 Loading environment variables..."
@@ -33,10 +37,16 @@ fi
 
 echo "🌐 Starting server..."
 
+# Add user local bin to PATH for this session
+export PATH="$HOME/.local/bin:$PATH"
+
 # Try different methods to start the server
 if command -v gunicorn >/dev/null 2>&1; then
     echo "Using gunicorn..."
     gunicorn --bind 0.0.0.0:5000 main:app --timeout 120 --workers 1 --preload
+elif [ -f "$HOME/.local/bin/gunicorn" ]; then
+    echo "Using user-installed gunicorn..."
+    $HOME/.local/bin/gunicorn --bind 0.0.0.0:5000 main:app --timeout 120 --workers 1 --preload
 elif command -v python3 >/dev/null 2>&1; then
     echo "Using python3 directly..."
     python3 run.py
