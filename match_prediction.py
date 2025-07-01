@@ -71,6 +71,12 @@ class MatchPredictor:
         self.api_key = os.environ.get('APIFOOTBALL_PREMIUM_KEY', 'aa2b2ffba35e4c25666961de6fd2f51419adeb32cc9d56394012f8e5067682df')
         self.predictions_cache = {}
         self._cache_modified = False
+        
+        # Cache management settings
+        self.cache_max_size = 100 * 1024 * 1024  # 100MB max cache size
+        self.cache_max_age = 7 * 24 * 3600  # 7 days max age
+        self.cache_max_entries = 10000  # Maximum number of cache entries
+        
         self.load_cache()
 
         # Bayesyen güncelleme için parametreler
@@ -312,7 +318,6 @@ class MatchPredictor:
             'Dinamo Zagreb', 'Hajduk Split'
         ]
         return team_name in big_teams
-
     def apply_team_specific_adjustments(self, home_team_id, away_team_id, home_team_name, away_team_name, 
                                    home_goals, away_goals, home_form=None, away_form=None, use_goal_trend_analysis=True):
         """Takım-spesifik tahmin modeli ayarlamaları ve Gol Trend İvmesi analizi"""
@@ -804,7 +809,6 @@ class MatchPredictor:
             logger.info(f"Düşük gol beklentisi sonrası KG VAR olasılığı: {kg_var_probability:.2f}")
             
         return kg_var_probability
-    
     def _calculate_kg_yok_probability(self, all_home_goals, all_away_goals, home_goals_lambda, away_goals_lambda, home_form=None, away_form=None):
         """
         KG YOK (en az bir takımın gol atamaması) olasılığını hesaplar
@@ -1003,7 +1007,7 @@ class MatchPredictor:
                 
                 # Deplasman takımının hücum gücü analizi
                 if avg_away_goals > 0:  # Bölme hatası önlemek için kontrol
-                    # Eğer deplasman takımı ortalamanın üzerinde gol atıyorsa
+                    # Eğer deplasman takım ortalamanın üzerinde gol atıyorsa
                     if avg_away_goals >= 1.5:  # Deplasmanda 1.5+ gol/maç iyi bir hücum göstergesi
                         away_attack_strength = 1.0 + min(0.25, (avg_away_goals - 1.2) * 0.1)  # ETKİ AZALTILDI
                         if away_attack_strength > 1.05:  # Log only if significant adjustment
@@ -1750,7 +1754,6 @@ class MatchPredictor:
             'weighted_points': weighted_points,
             'confidence': confidence
         }
-        
     def get_team_form(self, team_id, last_matches=21):
         """Takımın son maçlarındaki performansını al - son 21 maç verisi için tam değerlendirme"""
         try:
@@ -2215,7 +2218,6 @@ class MatchPredictor:
             'top_ht_ft_patterns': [('X/X', 3), ('1/1', 2), ('2/2', 1)],
             'recent_match_data': []
         }
-
     def predict_match(self, home_team_id, away_team_id, home_team_name, away_team_name, force_update=False, 
                    use_specialized_models=True, use_goal_trend_analysis=True):
         """Maç sonucunu tahmin et - Gelişmiş algoritma sıralaması ve tutarlılık kontrolü ile
@@ -2715,7 +2717,6 @@ class MatchPredictor:
         expected_away_goals = (combined_away_attack * 0.85 + combined_home_defense * 0.15) * away_advantage * home_defense_weakness
         
         logger.info(f"Ham gol beklentileri: Ev={expected_home_goals:.2f}, Deplasman={expected_away_goals:.2f}")
-
         # Sinir ağı tahminlerini entegre et (eğer varsa)
         if neural_home_goals > 0 and neural_away_goals > 0:
             # Kombine tahmin: %40 sinir ağı + %60 Bayesyen-Ağırlıklı
@@ -3214,7 +3215,6 @@ class MatchPredictor:
             total_goals = home_score + away_score
             if total_goals > 2.5:
                 over_2_5_goals += 1
-
             # Toplam gol sayısı 3.5'tan fazla mı
             if total_goals > 3.5:
                 over_3_5_goals += 1
@@ -3374,7 +3374,7 @@ class MatchPredictor:
         corners_over_9_5_prob = corners_over_9_5 / simulations
 
         # Beraberlik olasılığını yükseltme - kesin skor dağılımına göre ayarlama
-        # Hesaplanan en olası kesin skor X-X formunda ise (berabere) beraberlik olasılığını arttır
+        # Hesaplanan en olası kesin skor X-X formunda ise (berabere) beraberlik olasılığını artır
         top_exact_scores = sorted(exact_scores.items(), key=lambda x: x[1], reverse=True)[:3]
         
         # Özelleştirilmiş modelden beraberlik çarpanını al
@@ -3572,7 +3572,7 @@ class MatchPredictor:
         kg_var_total_prob = sum(count for _, count in kg_var_scores) / simulations if kg_var_scores else 0
         kg_yok_total_prob = sum(count for _, count in kg_yok_scores) / simulations if kg_yok_scores else 0
         
-        # Simülasyon sonuçları ile KG VAR/YOK tahmini tutarlı değilse kaydet
+        # Simülasyon sonuçları ile KG VAR/YOK tahmini tutarsız değilse kaydet
         if (kg_var_prediction and kg_var_total_prob < 0.5) or (not kg_var_prediction and kg_yok_total_prob < 0.5):
             logger.warning(f"Uyarı: KG VAR/YOK tahmini ({kg_var_prediction}) simülasyon sonuçlarıyla tutarsız! KG VAR olasılığı: %{kg_var_total_prob*100:.2f}, KG YOK olasılığı: %{kg_yok_total_prob*100:.2f}")
         
@@ -3713,7 +3713,6 @@ class MatchPredictor:
         home_avg_deviation = (home_recent_avg_goals[3] / self.lig_ortalamasi_ev_gol) * 0.5 + \
                             (home_recent_avg_goals[5] / self.lig_ortalamasi_ev_gol) * 0.3 + \
                             (home_recent_avg_goals[10] / self.lig_ortalamasi_ev_gol) * 0.2
-
         away_avg_deviation = (away_recent_avg_goals[3] / 1.0) * 0.5 + \
                             (away_recent_avg_goals[5] / 1.0) * 0.3 + \
                             (away_recent_avg_goals[10] / 1.0) * 0.2
@@ -3798,12 +3797,12 @@ class MatchPredictor:
         p_over_35_theoretical = 1 - p_under_35_theoretical
 
         # Simülasyon ve teorik hesaplamalar arasında dengeli karışım
-        # Daha konservatif ağırlıklandırma - teorik hesaplamalara daha fazla ağırlık
+        # Daha konservatif ağırlıklanmış - teorik hesaplamalara daha fazla ağırlık
         over_25_adjusted_prob = 0.4 * over_2_5_goals_prob + 0.6 * p_over_25_theoretical
         over_35_adjusted_prob = 0.4 * over_3_5_goals_prob + 0.6 * p_over_35_theoretical
 
         # Bahis tahminlerini hazırla - korner ve kart tahminlerini çıkararak basitleştir
-        # İlk olarak kesin skoru belirle
+        # İlk olarak kesin skordan maç sonucunu türet (tutarlılık için)
         temp_exact_score = most_likely_score[0]
         
         # Kesin skordan maç sonucunu türet (tutarlılık için)
@@ -3904,7 +3903,7 @@ class MatchPredictor:
         
         logger.info(f"KG VAR olasılığı - Teorik: {p_both_teams_score:.2f}, Geçmiş: {kg_var_historical_rate:.2f}, Birleşik: {p_kg_var_combined:.2f}")
         
-        # Önce varsayılan tahmin yap (başlangıçta nötr)
+        # İlk olarak varsayılan tahmin yap (başlangıçta nötr)
         kg_var_prediction = p_kg_var_combined > 0.5  # Başlangıç tahmini
         
         # HİBRİT SİSTEM AKTİF - Ek düzeltme yapılmayacak, hibrit sonucu korunacak
@@ -4157,7 +4156,7 @@ class MatchPredictor:
                 else:
                     same_outcome_scores["AWAY_WIN"][score] = prob
         
-        # Maç sonucu olasılıklarına göre en olası skoru belirlemek - beklenen golleri de hesaba katarak
+        # Maç sonucu olasılıklarına göre en olası skoru belirlemek - beklenen gollere göre
         most_likely_outcome = self._get_most_likely_outcome(home_win_prob, draw_prob, away_win_prob, avg_home_goals, avg_away_goals)
         
         # En olası maç sonucu için bir skor listesi oluştur
@@ -4191,7 +4190,6 @@ class MatchPredictor:
         # Eğer en olası maç sonucu için skorlar varsa, bunları değerlendir
         if top_scores_by_outcome:
             logger.info(f"En olası maç sonucu {most_likely_outcome} için olası skorlar: {[(s, round(p*100, 2)) for s, p in top_scores_by_outcome[:3]]}")
-        
         # Düşük gol beklentisinde (1'in altında) form durumuna göre karar ver
         # Ev sahibi takım için
         if avg_home_goals < 1.0:
@@ -4602,7 +4600,6 @@ class MatchPredictor:
             adjusted_score = f"{reasonable_home}-{reasonable_away}"
             logger.info(f"Skor beklenen gollere ve son maç ortalamalarına göre düzeltildi: {most_likely_score} -> {adjusted_score}")
             most_likely_score = adjusted_score
-        
         # ÖNEMLİ: Tutarlılık kontrolü! En olası sonuçla kesin skor tutarlı mı?
         # Beklenen golleri de hesaba katarak en olası sonucu belirle
         most_likely_outcome = self._get_most_likely_outcome(home_win_prob, draw_prob, away_win_prob, avg_home_goals, avg_away_goals)
@@ -5040,7 +5037,6 @@ class MatchPredictor:
         # En yüksek olasılıklı tahmini bul
         # Not: İY/MS tahmini artık kullanılmıyor (hibrit model kaldırıldı)
         most_confident_bet = max(bet_probabilities, key=bet_probabilities.get)
-
         # Tahmin sonuçlarını hazırla
         prediction = {
             'match': f"{home_team_name} vs {away_team_name}",
@@ -5192,7 +5188,7 @@ class MatchPredictor:
 
         # Gelişmiş modellerin tahminlerini ekle (varsa) - YENİ: Geliştirilmiş tutarlı entegrasyon
         if advanced_prediction:
-            # Gelişmiş tahminleri esas al - daha tutarlı yaklaşım
+            # Gelişmiş tahminlere esas al - daha tutarlı yaklaşım
             prediction['predictions']['advanced_models'] = {
                 'zero_inflated_poisson': {
                     'expected_goals': advanced_prediction['expected_goals'],
@@ -5327,171 +5323,6 @@ class MatchPredictor:
         
         logger.info(f"Tahmin yapıldı: {home_team_name} vs {away_team_name}")
         return prediction
-    
-    def _generate_independent_predictions(self, home_lambda, away_lambda, home_form, away_form, h2h_data):
-        """
-        Bağımsız tahmin modellerini kullanarak tahminleri oluşturur.
-        Kesin skordan bağımsız olarak her tahmin türü kendi modelini kullanır.
-        
-        Args:
-            home_lambda: Ev sahibi gol beklentisi
-            away_lambda: Deplasman gol beklentisi
-            home_form: Ev sahibi form verisi
-            away_form: Deplasman form verisi
-            h2h_data: Geçmiş karşılaşma verileri
-            
-        Returns:
-            dict: Bağımsız tahmin sonuçları
-        """
-        if not hasattr(self, 'independent_models') or not self.independent_models:
-            logger.warning("Bağımsız modeller kullanılamıyor, form ve istatistik tabanlı tahmin üretiliyor")
-            return self._generate_fallback_independent_predictions(home_lambda, away_lambda, home_form, away_form, h2h_data)
-            
-        try:
-            independent_predictions = {}
-            
-            # 1. 2.5 Üst/Alt tahmini
-            over_under_25 = self.independent_models.predict_over_under_goals(
-                home_lambda, away_lambda, home_form, away_form, h2h_data, threshold=2.5
-            )
-            independent_predictions['over_2_5_goals'] = over_under_25
-            
-            # 2. 3.5 Üst/Alt tahmini
-            over_under_35 = self.independent_models.predict_over_under_goals(
-                home_lambda, away_lambda, home_form, away_form, h2h_data, threshold=3.5
-            )
-            independent_predictions['over_3_5_goals'] = over_under_35
-            
-            # 3. KG Var/Yok tahmini
-            btts = self.independent_models.predict_both_teams_to_score(
-                home_lambda, away_lambda, home_form, away_form, h2h_data
-            )
-            independent_predictions['both_teams_to_score'] = btts
-            
-            # 4. Maç sonucu tahmini
-            match_result = self.independent_models.predict_match_result(
-                home_lambda, away_lambda, home_form, away_form, h2h_data
-            )
-            independent_predictions['match_result'] = match_result
-            
-            logger.info("Bağımsız tahmin modelleri başarıyla çalıştırıldı")
-            return independent_predictions
-            
-        except Exception as e:
-            logger.error(f"Bağımsız tahmin modelleri hatası: {str(e)}")
-            return self._generate_fallback_independent_predictions(home_lambda, away_lambda, home_form, away_form, h2h_data)
-    
-    def _generate_fallback_independent_predictions(self, home_lambda, away_lambda, home_form, away_form, h2h_data):
-        """
-        Bağımsız modeller mevcut olmadığında form ve istatistik tabanlı tahmin üretir.
-        
-        Args:
-            home_lambda: Ev sahibi gol beklentisi
-            away_lambda: Deplasman gol beklentisi
-            home_form: Ev sahibi form verisi
-            away_form: Deplasman form verisi
-            h2h_data: Geçmiş karşılaşma verileri
-            
-        Returns:
-            dict: Fallback tahmin sonuçları
-        """
-        try:
-            fallback_predictions = {}
-            
-            # Toplam beklenen gol sayısı
-            total_expected_goals = home_lambda + away_lambda
-            
-            # Form verilerinden gol ortalamaları
-            home_recent_goals = 0
-            away_recent_goals = 0
-            home_recent_conceded = 0
-            away_recent_conceded = 0
-            
-            if home_form and isinstance(home_form, dict):
-                home_recent_goals = home_form.get('goals_scored', 0) / max(1, home_form.get('recent_matches', 1))
-                home_recent_conceded = home_form.get('goals_conceded', 0) / max(1, home_form.get('recent_matches', 1))
-            
-            if away_form and isinstance(away_form, dict):
-                away_recent_goals = away_form.get('goals_scored', 0) / max(1, away_form.get('recent_matches', 1))
-                away_recent_conceded = away_form.get('goals_conceded', 0) / max(1, away_form.get('recent_matches', 1))
-            
-            # 1. 2.5 Üst/Alt - OVERRIDE DEVRE DIŞI
-            # Monte Carlo simülasyonu zaten doğru kararı verdi
-            # Fallback fonksiyonu sadece placeholder döndürür, override etmez
-            fallback_predictions['over_2_5_goals'] = 'MONTE_CARLO_DECISION_PRESERVED'
-            
-            # 2. 3.5 Üst/Alt - OVERRIDE DEVRE DIŞI
-            # Monte Carlo simülasyonu zaten doğru kararı verdi
-            fallback_predictions['over_3_5_goals'] = 'MONTE_CARLO_DECISION_PRESERVED'
-            
-            # 3. KG Var/Yok tahmini - MONTE CARLO KARARI KORUNUYOR, FALLBACK OVERRIDE YOK
-            # Bu fallback fonksiyonu Monte Carlo sonucunu ezmemelidir
-            # KG VAR/YOK kararı zaten Monte Carlo simülasyonunda verildi
-            # Fallback sadece olasılık değerini hesaplar, kararı değiştirmez
-            home_goal_prob = 1 - (2.718 ** (-home_lambda))  # Poisson P(X>0)
-            away_goal_prob = 1 - (2.718 ** (-away_lambda))
-            both_score_prob = home_goal_prob * away_goal_prob
-            
-            # Form faktörünü de dahil et
-            if home_recent_goals > 0.8 and away_recent_goals > 0.8:
-                both_score_prob = min(0.9, both_score_prob * 1.2)
-            elif home_recent_goals < 0.5 or away_recent_goals < 0.5:
-                both_score_prob = max(0.1, both_score_prob * 0.7)
-            
-            # DEVRE DIŞI: Fallback function Monte Carlo kararını ezemez
-            # Monte Carlo simulation zaten doğru kararı verdi (KG VAR)
-            # Bu fallback sadece olasılık hesaplar, karar vermez
-            fallback_predictions['both_teams_to_score'] = 'MONTE_CARLO_DECISION_PRESERVED'  # Placeholder
-            
-            # 4. Maç sonucu tahmini - gol beklentileri ve form analizine göre
-            goal_difference = home_lambda - away_lambda
-            
-            # Form gücü farkını hesapla
-            home_form_strength = 0.5  # Default
-            away_form_strength = 0.5  # Default
-            
-            if home_form and isinstance(home_form, dict):
-                home_wins = home_form.get('wins', 0)
-                home_matches = home_form.get('recent_matches', 1)
-                home_form_strength = home_wins / max(1, home_matches)
-            
-            if away_form and isinstance(away_form, dict):
-                away_wins = away_form.get('wins', 0)
-                away_matches = away_form.get('recent_matches', 1)
-                away_form_strength = away_wins / max(1, away_matches)
-            
-            form_difference = home_form_strength - away_form_strength
-            
-            # Ev sahibi avantajı ekle
-            adjusted_difference = goal_difference + 0.2 + (form_difference * 0.3)
-            
-            if adjusted_difference > 0.4:
-                fallback_predictions['match_result'] = 'HOME_WIN'
-            elif adjusted_difference < -0.4:
-                fallback_predictions['match_result'] = 'AWAY_WIN'
-            else:
-                # Çok yakın maçlarda form farkına göre karar ver
-                if abs(form_difference) > 0.3:
-                    if form_difference > 0:
-                        fallback_predictions['match_result'] = 'HOME_WIN'
-                    else:
-                        fallback_predictions['match_result'] = 'AWAY_WIN'
-                else:
-                    fallback_predictions['match_result'] = 'DRAW'
-            
-            logger.info(f"Fallback tahminler oluşturuldu: {fallback_predictions}")
-            return fallback_predictions
-            
-        except Exception as e:
-            logger.error(f"Fallback tahmin oluşturma hatası: {str(e)}")
-            # En son çare olarak basit tahminler
-            return {
-                'over_2_5_goals': '2.5 ÜST' if home_lambda + away_lambda > 2.5 else '2.5 ALT',
-                'over_3_5_goals': '3.5 ÜST' if home_lambda + away_lambda > 3.5 else '3.5 ALT',
-                'both_teams_to_score': 'KG VAR' if home_lambda > 0.8 and away_lambda > 0.8 else 'KG YOK',
-                'match_result': 'HOME_WIN' if home_lambda > away_lambda + 0.3 else ('AWAY_WIN' if away_lambda > home_lambda + 0.3 else 'DRAW')
-            }
-    
     def _check_prediction_consistency(self, prediction):
         """
         Bağımsız tahmin modellerini kullanarak tahminleri günceller.
@@ -5975,7 +5806,6 @@ class MatchPredictor:
         except Exception as e:
             logger.error(f"Güç analizi açıklaması oluşturulurken hata: {e}")
             return "Takım güç analizi yapılamadı."
-
     def _calculate_hybrid_kg_var_probability(self, home_team_id, away_team_id, home_goals, away_goals, home_form, away_form, base_prob):
         """
         Hibrit KG VAR/YOK tahmin sistemi: Poisson + Logistic Regresyon
@@ -6110,320 +5940,6 @@ class MatchPredictor:
         logger.info(f"=== HİBRİT KG VAR/YOK TAHMİN SİSTEMİ SONU ===")
         
         return final_probability
-    
-    def _calculate_dynamic_kg_var_probability(self, home_goals, away_goals, home_form, away_form, base_probability):
-        """
-        Dinamik KG VAR/YOK olasılığı hesaplar - gol beklentileri ve form verilerine dayalı
-        
-        Args:
-            home_goals: Ev sahibi gol beklentisi
-            away_goals: Deplasman gol beklentisi
-            home_form: Ev sahibi form verileri
-            away_form: Deplasman form verileri
-            base_probability: Monte Carlo temel olasılığı
-            
-        Returns:
-            float: Dinamik KG VAR olasılığı (0-1 arası)
-        """
-        try:
-            # Başlangıç olasılığı
-            kg_var_prob = base_probability
-            
-            # 1. GOL BEKLENTİSİ FAKTÖRÜ (Ana faktör)
-            min_goal_expectation = min(home_goals, away_goals)
-            max_goal_expectation = max(home_goals, away_goals)
-            avg_goal_expectation = (home_goals + away_goals) / 2
-            
-            # Çok düşük gol beklentisi durumları
-            if min_goal_expectation <= 0.5:
-                kg_var_prob *= 0.3  # %70 azalma
-                logger.info(f"Çok düşük gol beklentisi ({min_goal_expectation:.2f}) - KG VAR olasılığı %30'a düştü")
-            elif min_goal_expectation <= 0.8:
-                kg_var_prob *= 0.5  # %50 azalma
-                logger.info(f"Düşük gol beklentisi ({min_goal_expectation:.2f}) - KG VAR olasılığı %50'ye düştü")
-            elif min_goal_expectation <= 1.0:
-                kg_var_prob *= 0.7  # %30 azalma
-                logger.info(f"Orta-düşük gol beklentisi ({min_goal_expectation:.2f}) - KG VAR olasılığı %70'e düştü")
-            elif min_goal_expectation <= 1.2:
-                kg_var_prob *= 0.85  # %15 azalma
-                logger.info(f"Orta gol beklentisi ({min_goal_expectation:.2f}) - KG VAR olasılığı %85'e düştü")
-            
-            # İki takım da yüksek gol beklentisine sahipse
-            if min_goal_expectation >= 1.3 and avg_goal_expectation >= 2.0:
-                kg_var_prob = min(0.95, kg_var_prob * 1.2)  # %20 artış, max %95
-                logger.info(f"İki takım da yüksek gol beklentisi - KG VAR olasılığı artırıldı")
-            
-            # 2. GOL FARKI FAKTÖRÜ
-            goal_difference = abs(home_goals - away_goals)
-            if goal_difference > 1.5:
-                kg_var_prob *= 0.8  # Büyük fark olunca zayıf takım gol atamayabilir
-                logger.info(f"Büyük gol farkı beklentisi ({goal_difference:.2f}) - KG VAR olasılığı azaldı")
-            elif goal_difference > 1.0:
-                kg_var_prob *= 0.9  # Orta fark
-                logger.info(f"Orta gol farkı beklentisi ({goal_difference:.2f}) - KG VAR olasılığı biraz azaldı")
-            
-            # 3. FORM FAKTÖRÜ
-            if home_form and away_form:
-                # Son maçlardaki gol ortalamaları
-                home_recent_goals = home_form.get('avg_goals_scored', 1.0)
-                away_recent_goals = away_form.get('avg_goals_scored', 1.0)
-                home_recent_conceded = home_form.get('avg_goals_conceded', 1.0)
-                away_recent_conceded = away_form.get('avg_goals_conceded', 1.0)
-                
-                # Her iki takım da son maçlarda az gol atıyorsa
-                if home_recent_goals < 0.8 and away_recent_goals < 0.8:
-                    kg_var_prob *= 0.6
-                    logger.info(f"İki takım da kötü atak formu - KG VAR olasılığı azaldı")
-                elif home_recent_goals < 1.0 and away_recent_goals < 1.0:
-                    kg_var_prob *= 0.8
-                    logger.info(f"İki takım da orta-kötü atak formu - KG VAR olasılığı biraz azaldı")
-                
-                # Her iki takım da iyi savunma yapıyorsa
-                if home_recent_conceded < 0.7 and away_recent_conceded < 0.7:
-                    kg_var_prob *= 0.7
-                    logger.info(f"İki takım da güçlü savunma - KG VAR olasılığı azaldı")
-                
-                # Form puanları (0-1 arası)
-                home_form_points = home_form.get('form_points', 0.5)
-                away_form_points = away_form.get('form_points', 0.5)
-                
-                # İki takım da kötü formdaysa
-                if home_form_points < 0.3 and away_form_points < 0.3:
-                    kg_var_prob *= 0.75
-                    logger.info(f"İki takım da kötü form - KG VAR olasılığı azaldı")
-            
-            # 4. TOPLAM GOL BEKLENTİSİ KONTROLÜ
-            total_goals = home_goals + away_goals
-            if total_goals < 1.5:
-                kg_var_prob *= 0.4  # Çok düşük skorlu maç beklentisi
-                logger.info(f"Çok düşük toplam gol beklentisi ({total_goals:.2f}) - KG VAR olasılığı çok azaldı")
-            elif total_goals < 2.0:
-                kg_var_prob *= 0.6  # Düşük skorlu maç beklentisi
-                logger.info(f"Düşük toplam gol beklentisi ({total_goals:.2f}) - KG VAR olasılığı azaldı")
-            elif total_goals < 2.5:
-                kg_var_prob *= 0.8  # Orta-düşük skorlu maç
-                logger.info(f"Orta-düşük toplam gol beklentisi ({total_goals:.2f}) - KG VAR olasılığı biraz azaldı")
-            elif total_goals > 3.5:
-                kg_var_prob = min(0.95, kg_var_prob * 1.1)  # Yüksek skorlu maç beklentisi
-                logger.info(f"Yüksek toplam gol beklentisi ({total_goals:.2f}) - KG VAR olasılığı artırıldı")
-            
-            # 5. MİNİMUM VE MAKSİMUM SINIRLAR
-            kg_var_prob = max(0.05, min(0.95, kg_var_prob))  # %5-%95 arasında sınırla
-            
-            logger.info(f"Dinamik KG VAR olasılığı hesaplandı: {kg_var_prob:.3f} ({kg_var_prob*100:.1f}%)")
-            logger.info(f"Gol beklentileri: Ev {home_goals:.2f}, Deplasman {away_goals:.2f}, Min: {min_goal_expectation:.2f}")
-            
-            return kg_var_prob
-            
-        except Exception as e:
-            logger.error(f"Dinamik KG VAR olasılığı hesaplanırken hata: {e}")
-            # Hata durumunda güvenli fallback
-            if min(home_goals, away_goals) < 0.8:
-                return 0.25  # Düşük gol beklentisinde güvenli KG YOK eğilimi
-            else:
-                return base_probability  # Normal durumda Monte Carlo sonucunu kullan
-
-    def _calculate_low_scoring_advantage(self, home_form, away_form, home_team_id, away_team_id):
-        """Düşük skorlu maçlarda hangi takımın avantajlı olduğunu hesapla"""
-        try:
-            home_advantage = 0.0
-            
-            # Form puanlarını karşılaştır
-            if home_form and away_form:
-                home_form_points = home_form.get('weighted_form_points', 0.5)
-                away_form_points = away_form.get('weighted_form_points', 0.5)
-                form_diff = home_form_points - away_form_points
-                home_advantage += form_diff * 0.5
-                
-                # Ev sahibi performansını değerlendir
-                home_perf = home_form.get('home_performance', {})
-                if home_perf:
-                    home_home_form = home_perf.get('weighted_form_points', 0.5)
-                    if home_home_form > 0.6:  # İyi ev sahibi performansı
-                        home_advantage += 0.2
-                    elif home_home_form < 0.4:  # Kötü ev sahibi performansı
-                        home_advantage -= 0.1
-                
-                # Deplasman performansını değerlendir
-                away_perf = away_form.get('away_performance', {})
-                if away_perf:
-                    away_away_form = away_perf.get('weighted_form_points', 0.5)
-                    if away_away_form > 0.6:  # İyi deplasman performansı
-                        home_advantage -= 0.2
-                    elif away_away_form < 0.4:  # Kötü deplasman performansı
-                        home_advantage += 0.1
-            
-            # Ev sahibi avantajı ekle (genel olarak)
-            home_advantage += 0.1
-            
-            # -0.5 ile 0.5 arasında sınırla
-            return max(-0.5, min(0.5, home_advantage))
-            
-        except Exception as e:
-            logger.error(f"Düşük skor avantajı hesaplanırken hata: {e}")
-            return 0.1  # Varsayılan ev sahibi avantajı
-
-    def analyze_head_to_head(self, home_team_id, away_team_id, home_team_name, away_team_name):
-        """İki takım arasındaki önceki karşılaşmaları analiz et"""
-        try:
-            # H2H verilerini API'den almaya çalış
-            try:
-                from api_football import get_head_to_head_data
-                h2h_data = get_head_to_head_data(home_team_id, away_team_id)
-            except ImportError:
-                logger.warning("api_football modülü bulunamadı, H2H verisi alınamıyor")
-                h2h_data = None
-            
-            if not h2h_data or len(h2h_data) == 0:
-                logger.info(f"H2H verisi bulunamadı: {home_team_name} vs {away_team_name}")
-                return {
-                    'total_matches': 0,
-                    'home_wins': 0,
-                    'draws': 0,
-                    'away_wins': 0,
-                    'home_win_rate': 0.0,
-                    'draw_rate': 0.0,
-                    'away_win_rate': 0.0,
-                    'avg_home_goals': 0.0,
-                    'avg_away_goals': 0.0,
-                    'avg_total_goals': 0.0,
-                    'both_teams_scored_rate': 0.0,
-                    'over_2_5_rate': 0.0,
-                    'trend': 'NEUTRAL',
-                    'recent_form': 'BALANCED'
-                }
-            
-            # H2H istatistiklerini hesapla
-            total_matches = len(h2h_data)
-            home_wins = 0
-            draws = 0
-            away_wins = 0
-            total_home_goals = 0
-            total_away_goals = 0
-            both_teams_scored = 0
-            over_2_5_matches = 0
-            
-            # Son 5 maçın trend analizi için
-            recent_matches = h2h_data[:5] if len(h2h_data) >= 5 else h2h_data
-            recent_home_wins = 0
-            
-            for match in h2h_data:
-                try:
-                    # Gol sayılarını al
-                    home_goals = int(match.get('home_goals', 0))
-                    away_goals = int(match.get('away_goals', 0))
-                    
-                    total_home_goals += home_goals
-                    total_away_goals += away_goals
-                    
-                    # Maç sonucunu belirle
-                    if home_goals > away_goals:
-                        home_wins += 1
-                    elif home_goals < away_goals:
-                        away_wins += 1
-                    else:
-                        draws += 1
-                    
-                    # KG Var kontrolü
-                    if home_goals > 0 and away_goals > 0:
-                        both_teams_scored += 1
-                    
-                    # 2.5 Üst kontrolü
-                    if (home_goals + away_goals) > 2:
-                        over_2_5_matches += 1
-                        
-                except (ValueError, KeyError):
-                    continue
-            
-            # Son maçlardaki trend
-            for match in recent_matches:
-                try:
-                    home_goals = int(match.get('home_goals', 0))
-                    away_goals = int(match.get('away_goals', 0))
-                    if home_goals > away_goals:
-                        recent_home_wins += 1
-                except (ValueError, KeyError):
-                    continue
-            
-            # Oranları hesapla
-            if total_matches > 0:
-                home_win_rate = (home_wins / total_matches) * 100
-                draw_rate = (draws / total_matches) * 100
-                away_win_rate = (away_wins / total_matches) * 100
-                avg_home_goals = total_home_goals / total_matches
-                avg_away_goals = total_away_goals / total_matches
-                avg_total_goals = (total_home_goals + total_away_goals) / total_matches
-                both_teams_scored_rate = (both_teams_scored / total_matches) * 100
-                over_2_5_rate = (over_2_5_matches / total_matches) * 100
-            else:
-                home_win_rate = draw_rate = away_win_rate = 0.0
-                avg_home_goals = avg_away_goals = avg_total_goals = 0.0
-                both_teams_scored_rate = over_2_5_rate = 0.0
-            
-            # Trend analizi
-            if len(recent_matches) > 0:
-                recent_home_rate = (recent_home_wins / len(recent_matches))
-                if recent_home_rate > 0.6:
-                    trend = 'HOME_FAVORED'
-                elif recent_home_rate < 0.3:
-                    trend = 'AWAY_FAVORED'
-                else:
-                    trend = 'BALANCED'
-            else:
-                trend = 'NEUTRAL'
-            
-            # Form analizi
-            if home_win_rate > away_win_rate + 20:
-                recent_form = 'HOME_DOMINANT'
-            elif away_win_rate > home_win_rate + 20:
-                recent_form = 'AWAY_DOMINANT'
-            elif abs(home_win_rate - away_win_rate) <= 20:
-                recent_form = 'BALANCED'
-            else:
-                recent_form = 'SLIGHTLY_FAVORED'
-            
-            h2h_analysis = {
-                'total_matches': total_matches,
-                'home_wins': home_wins,
-                'draws': draws,
-                'away_wins': away_wins,
-                'home_win_rate': round(home_win_rate, 1),
-                'draw_rate': round(draw_rate, 1),
-                'away_win_rate': round(away_win_rate, 1),
-                'avg_home_goals': round(avg_home_goals, 2),
-                'avg_away_goals': round(avg_away_goals, 2),
-                'avg_total_goals': round(avg_total_goals, 2),
-                'both_teams_scored_rate': round(both_teams_scored_rate, 1),
-                'over_2_5_rate': round(over_2_5_rate, 1),
-                'trend': trend,
-                'recent_form': recent_form
-            }
-            
-            logger.info(f"H2H Analizi: {total_matches} maç - Ev {home_wins}G-{draws}B-{away_wins}M Deplasman")
-            logger.info(f"H2H Goller: Ev {avg_home_goals:.2f} - Deplasman {avg_away_goals:.2f} (Ort: {avg_total_goals:.2f})")
-            
-            return h2h_analysis
-            
-        except Exception as e:
-            logger.error(f"H2H analizi hatası: {e}")
-            # Hata durumunda boş analiz döndür
-            return {
-                'total_matches': 0,
-                'home_wins': 0,
-                'draws': 0,
-                'away_wins': 0,
-                'home_win_rate': 0.0,
-                'draw_rate': 0.0,
-                'away_win_rate': 0.0,
-                'avg_home_goals': 0.0,
-                'avg_away_goals': 0.0,
-                'avg_total_goals': 0.0,
-                'both_teams_scored_rate': 0.0,
-                'over_2_5_rate': 0.0,
-                'trend': 'NEUTRAL',
-                'recent_form': 'BALANCED'
-            }
-
     def _calculate_confidence(self, home_form, away_form, betting_predictions=None, simulation_results=None):
         """Gelişmiş tahmin güvenilirlik skorunu hesaplar"""
         try:
