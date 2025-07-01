@@ -40,7 +40,7 @@ class MatchPredictor:
     """
     
     def __init__(self):
-        self.api_key = os.environ.get('APIFOOTBALL_PREMIUM_KEY', 'aa2b2ffba35e4c25666961de6fd2f51419adeb32cc9d56394012f8e5067682df')
+        self.api_key = os.environ.get('APIFOOTBALL_PREMIUM_KEY', '908ca1caaca4f5470f8c9d7f01a02d66fa06d149e77627804796c4f12568a485')
         
         # Use optimized cache manager
         try:

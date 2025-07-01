@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 # API Keys
 FOOTBALL_DATA_API_KEY = os.environ.get('FOOTBALL_DATA_API_KEY', '668dd03e0aea41b58fce760cdf4eddc8')
-API_FOOTBALL_KEY = os.environ.get('APIFOOTBALL_API_KEY', 'aa2b2ffba35e4c25666961de6fd2f51419adeb32cc9d56394012f8e5067682df')
+API_FOOTBALL_KEY = os.environ.get('APIFOOTBALL_API_KEY', '908ca1caaca4f5470f8c9d7f01a02d66fa06d149e77627804796c4f12568a485')
 
 # Blueprint definition
 api_v3_bp = Blueprint('api_v3', __name__, url_prefix='/api/v3')
