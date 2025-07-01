@@ -2,65 +2,108 @@ import logging
 import json
 import os
 import math
+import sys
 from datetime import datetime, timedelta
+from functools import lru_cache
 import requests
 from fixed_safe_imports import safe_import_numpy, safe_import_pandas, safe_import_sklearn, safe_import_tensorflow
 
-# Safe imports for problematic dependencies
+# Safe imports for problematic dependencies - cached to avoid repeated calls
 np = safe_import_numpy()
 pd = safe_import_pandas()
 RandomForestRegressor, StandardScaler, train_test_split = safe_import_sklearn()
 tf = safe_import_tensorflow()
-Sequential = tf.keras.models.Sequential if hasattr(tf, 'keras') else None
-load_model = tf.keras.models.load_model if hasattr(tf, 'keras') else None
-save_model = tf.keras.models.save_model if hasattr(tf, 'keras') else None
-Dense = tf.keras.layers.Dense if hasattr(tf, 'keras') else None
-Dropout = tf.keras.layers.Dropout if hasattr(tf, 'keras') else None
-EarlyStopping = tf.keras.callbacks.EarlyStopping if hasattr(tf, 'keras') else None
-# Konsensüs filtresi kaldırıldı - tutarsızlık sorunlarını çözmek için
 
-# Bağımsız tahmin modelleri - DEVRE DIŞI (çakışma önleme)
-INDEPENDENT_MODELS_AVAILABLE = False
+# Pre-compute TensorFlow components once for better performance
+KERAS_COMPONENTS = None
+if tf and hasattr(tf, 'keras'):
+    KERAS_COMPONENTS = {
+        'Sequential': tf.keras.models.Sequential,
+        'load_model': tf.keras.models.load_model,
+        'save_model': tf.keras.models.save_model,
+        'Dense': tf.keras.layers.Dense,
+        'Dropout': tf.keras.layers.Dropout,
+        'EarlyStopping': tf.keras.callbacks.EarlyStopping
+    }
 
-# Gelişmiş makine öğrenmesi modelleri için import
-# Global değişkenler
-ADVANCED_MODELS_AVAILABLE = False
-TEAM_SPECIFIC_MODELS_AVAILABLE = False
-ENHANCED_MONTE_CARLO_AVAILABLE = False
-SPECIALIZED_MODELS_AVAILABLE = False
-ENHANCED_FACTORS_AVAILABLE = True
-GOAL_TREND_ANALYZER_AVAILABLE = False
+Sequential = KERAS_COMPONENTS['Sequential'] if KERAS_COMPONENTS else None
+load_model = KERAS_COMPONENTS['load_model'] if KERAS_COMPONENTS else None
+save_model = KERAS_COMPONENTS['save_model'] if KERAS_COMPONENTS else None
+Dense = KERAS_COMPONENTS['Dense'] if KERAS_COMPONENTS else None
+Dropout = KERAS_COMPONENTS['Dropout'] if KERAS_COMPONENTS else None
+EarlyStopping = KERAS_COMPONENTS['EarlyStopping'] if KERAS_COMPONENTS else None
+# Feature flags - consolidated and optimized for better performance
+FEATURE_FLAGS = {
+    'INDEPENDENT_MODELS_AVAILABLE': False,
+    'ADVANCED_MODELS_AVAILABLE': False,
+    'TEAM_SPECIFIC_MODELS_AVAILABLE': False,
+    'ENHANCED_MONTE_CARLO_AVAILABLE': False,
+    'SPECIALIZED_MODELS_AVAILABLE': False,
+    'ENHANCED_FACTORS_AVAILABLE': True,
+    'GOAL_TREND_ANALYZER_AVAILABLE': False,
+    'KG_HYBRID_MODELS_AVAILABLE': False
+}
 
-# Gelişmiş tahmin modelleri - DEVRE DIŞI (import hataları nedeniyle)
-ADVANCED_MODELS_AVAILABLE = False
-    
-try:
-    from goal_trend_analyzer import get_instance as get_goal_trend_analyzer
-    GOAL_TREND_ANALYZER_AVAILABLE = True
-    logging.info("Gol Trend İvmesi Analiz modülü başarıyla yüklendi!")
-except ImportError:
-    # Modül bulunamadıysa uyarı ver ama çalışmaya devam et
-    logging.warning("Gol Trend İvmesi Analiz modülü (goal_trend_analyzer) bulunamadı! Bu özellik kullanılamayacak.")
-    
-# Gelişmiş Monte Carlo - DEVRE DIŞI (import hataları nedeniyle)
-ENHANCED_MONTE_CARLO_AVAILABLE = False
-
-# Özelleştirilmiş modeller - DEVRE DIŞI (import hataları nedeniyle)
-SPECIALIZED_MODELS_AVAILABLE = False
-
-# Takım-spesifik modeller - DEVRE DIŞI (çakışma önleme)
-TEAM_SPECIFIC_MODELS_AVAILABLE = False
-
-# KG VAR/YOK Hibrit Modelleri - DEVRE DIŞI (çakışma önleme, hybrid_kg_service.py kullanılıyor)
-KG_HYBRID_MODELS_AVAILABLE = False
-    
-# Gelişmiş tahmin faktörleri için import
+# Try to load enhanced features once at module level for better performance
 try:
     from enhanced_prediction_factors import get_instance as get_enhanced_factors
-    ENHANCED_FACTORS_AVAILABLE = True
+    FEATURE_FLAGS['ENHANCED_FACTORS_AVAILABLE'] = True
 except ImportError:
-    # Modül bulunamadıysa uyarı ver ama çalışmaya devam et
-    logging.warning("Gelişmiş tahmin faktörleri (enhanced_prediction_factors) bulunamadı! Temel tahmin faktörleri kullanılacak.")
+    logging.warning("Enhanced prediction factors module not found - using basic factors")
+
+try:
+    from goal_trend_analyzer import get_instance as get_goal_trend_analyzer
+    FEATURE_FLAGS['GOAL_TREND_ANALYZER_AVAILABLE'] = True
+    logging.info("Goal trend analyzer module loaded successfully")
+except ImportError:
+    logging.warning("Goal trend analyzer module not found")
+
+# Constants - moved to module level for better performance
+DUSUK_GOL_BEKLENTI_KARAR_ESIGI = 0.6
+TOPLAM_GOL_DUSUK_ESIK = 1.0
+TOPLAM_GOL_ORTA_ESIK = 1.5
+EV_SAHIBI_GUC_FARKI_ESIGI = 0.3
+
+# Big teams list - pre-computed frozenset for O(1) lookup
+BIG_TEAMS = frozenset([
+    # European big teams
+    'Real Madrid', 'Barcelona', 'Atletico Madrid', 'Real Sociedad', 'Villarreal',
+    'Bayern Munich', 'Borussia Dortmund', 'RB Leipzig', 'Bayer Leverkusen', 'Eintracht Frankfurt',
+    'Manchester City', 'Manchester United', 'Liverpool', 'Chelsea', 'Arsenal', 'Tottenham', 'West Ham', 'Aston Villa', 'Brighton',
+    'PSG', 'Lille', 'Monaco', 'Lyon', 'Marseille', 'Stade Rennes',
+    'Inter', 'Milan', 'Juventus', 'Napoli', 'Roma', 'Lazio', 'Atalanta', 'Bologna',
+    'Galatasaray', 'Fenerbahce', 'Besiktas', 'Trabzonspor',
+    'Benfica', 'Porto', 'Sporting', 'Braga',
+    'Ajax', 'PSV', 'Feyenoord', 'AZ Alkmaar',
+    'Club Brugge', 'Royal Antwerp', 'Anderlecht', 'Gent',
+    'Celtic', 'Rangers',
+    'Olympiacos', 'Panathinaikos', 'AEK Athens', 'PAOK',
+    'Young Boys', 'Basel', 'Servette',
+    'Red Bull Salzburg', 'Sturm Graz', 'Rapid Wien',
+    'Slavia Prague', 'Sparta Prague', 'Viktoria Plzen',
+    'Shakhtar Donetsk', 'Dynamo Kyiv',
+    'Dinamo Zagreb', 'Hajduk Split'
+])
+
+# Team-specific data - optimized dictionaries for faster lookups
+HOME_AWAY_ASYMMETRIES = {
+    "610": {"name": "Galatasaray", "home_factor": 1.40, "away_factor": 0.85},
+    "1005": {"name": "Fenerbahçe", "home_factor": 1.35, "away_factor": 0.90},
+    "614": {"name": "Beşiktaş", "home_factor": 1.30, "away_factor": 0.90},
+    "636": {"name": "Trabzonspor", "home_factor": 1.35, "away_factor": 0.85},
+    "611": {"name": "Rizespor", "home_factor": 1.30, "away_factor": 0.75},
+    "6010": {"name": "Başakşehir", "home_factor": 1.15, "away_factor": 0.95},
+    "632": {"name": "Konyaspor", "home_factor": 1.20, "away_factor": 0.90},
+    "1020": {"name": "Alanyaspor", "home_factor": 1.25, "away_factor": 0.90}
+}
+
+DEFENSIVE_WEAK_TEAMS = {
+    "7667": {"name": "Adana Demirspor", "factor": 1.35, "offensive_factor": 1.15},
+    "621": {"name": "Kasimpasa", "factor": 1.30, "offensive_factor": 1.12},
+    "611": {"name": "Rizespor", "factor": 1.28, "offensive_factor": 1.10},
+    "607": {"name": "Antalyaspor", "factor": 1.20, "offensive_factor": 1.08},
+    "629": {"name": "Samsunspor", "factor": 1.25, "offensive_factor": 1.10}
+}
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -72,252 +115,169 @@ class MatchPredictor:
         self.predictions_cache = {}
         self._cache_modified = False
         
-        # Cache management settings
-        self.cache_max_size = 100 * 1024 * 1024  # 100MB max cache size
+        # Optimized cache management settings - reduced memory usage
+        self.cache_max_size = 50 * 1024 * 1024  # 50MB max cache size
         self.cache_max_age = 7 * 24 * 3600  # 7 days max age
-        self.cache_max_entries = 10000  # Maximum number of cache entries
+        self.cache_max_entries = 5000  # Reduced maximum number of cache entries
         
         self.load_cache()
 
-        # Bayesyen güncelleme için parametreler
-        self.lig_ortalamasi_ev_gol = 1.5  # Ev sahibi takımların lig genelinde maç başına ortalama gol
-        # SABİT LİG ORTALAMASI ÇARPANI KALDIRILDI
-        # 1.2 sabit değer kaldırıldı - dinamik hesaplama kullanılmalı
-        self.k_ev = 5  # Ev sahibi prior gücü (daha fazla veri geldikçe etkisi azalır)
-        self.k_deplasman = 5  # Deplasman prior gücü
-
-        # Gamma dağılımı için prior parametreler
-        # SABİT EV SAHİBİ ÇARPANI KALDIRILDI - DİNAMİK HESAPLAMA KULLANILMALI
+        # Bayesian parameters - optimized constants
+        self.lig_ortalamasi_ev_gol = 1.5
+        self.k_ev = 5
+        self.k_deplasman = 5
         self.alpha_ev_atma = self.k_ev
-        self.beta_ev = self.k_ev  # Gamma dağılımı için beta
-        # SABİT DEPLASMAN ÇARPANI KALDIRILDI - DİNAMİK HESAPLAMA KULLANILMALI
+        self.beta_ev = self.k_ev
         self.alpha_deplasman_atma = self.k_deplasman
         self.beta_deplasman = self.k_deplasman
 
-        # Sinir ağı için standardizasyon ve model
+        # Neural network components
         self.scaler = StandardScaler()
         self.model_home = None
-        
-        # Özelleştirilmiş Modeller (düşük/orta/yüksek skorlu maçlar)
-        self.specialized_models = None
         self.model_away = None
+        self.specialized_models = None
         
-        # Dinamik input_dim belirleme
-        sample_form = {'home_performance': {}, 'bayesian': {}, 'recent_matches': 0, 'home_matches': 0}
-        sample_features = self.prepare_data_for_neural_network(sample_form, is_home=True)
+        # Optimized input dimension calculation
+        self.input_dim = self._calculate_input_dim()
         
-        # Handle both real arrays and mock fallback
+        # Load or create models
+        self.load_or_create_models()
+        
+        # Initialize enhanced features if available
+        self._initialize_enhanced_features()
+
+    def _calculate_input_dim(self):
+        """Optimized input dimension calculation"""
         try:
+            sample_form = {
+                'home_performance': {},
+                'bayesian': {},
+                'recent_matches': 0,
+                'home_matches': 0
+            }
+            sample_features = self.prepare_data_for_neural_network(sample_form, is_home=True)
+            
             if sample_features is not None and len(sample_features) > 0:
                 first_row = sample_features[0]
                 if hasattr(first_row, '__len__') and not isinstance(first_row, (int, float)):
-                    self.input_dim = len(first_row)
+                    return len(first_row)
                 else:
-                    self.input_dim = len(sample_features) if hasattr(sample_features, '__len__') else 10
-            else:
-                self.input_dim = 10
-        except (TypeError, IndexError):
-            self.input_dim = 10
+                    return len(sample_features) if hasattr(sample_features, '__len__') else 10
+            return 10
+        except (TypeError, IndexError, AttributeError):
+            return 10
 
-        # Modeli yükleme veya oluşturma
-        self.load_or_create_models()
-        
-        # Gelişmiş makine öğrenmesi modelleri
-        if 'ADVANCED_MODELS_AVAILABLE' in globals() and globals()['ADVANCED_MODELS_AVAILABLE']:
+    def _initialize_enhanced_features(self):
+        """Initialize enhanced features based on availability"""
+        # Enhanced factors
+        if FEATURE_FLAGS['ENHANCED_FACTORS_AVAILABLE']:
             try:
-                logger.info("Gelişmiş tahmin modelleri yükleniyor...")
-                self.advanced_models = AdvancedPredictionModels()
-                self.bayesian_network = BayesianNetwork()
-                logger.info("Gelişmiş tahmin modelleri başarıyla yüklendi.")
-            except Exception as e:
-                logger.error(f"Gelişmiş tahmin modelleri yüklenirken hata: {str(e)}")
-                globals()['ADVANCED_MODELS_AVAILABLE'] = False
-        
-        # Gelişmiş Monte Carlo simülasyonu
-        if 'ENHANCED_MONTE_CARLO_AVAILABLE' in globals() and globals()['ENHANCED_MONTE_CARLO_AVAILABLE']:
-            try:
-                logger.info("Gelişmiş Monte Carlo simülasyonu yükleniyor...")
-                self.enhanced_monte_carlo = EnhancedMonteCarlo()
-                logger.info("Gelişmiş Monte Carlo simülasyonu başarıyla yüklendi.")
-            except Exception as e:
-                logger.error(f"Gelişmiş Monte Carlo simülasyonu yüklenirken hata: {str(e)}")
-                globals()['ENHANCED_MONTE_CARLO_AVAILABLE'] = False
-        
-        # Takım-spesifik tahmin modelleri
-        if 'TEAM_SPECIFIC_MODELS_AVAILABLE' in globals() and globals()['TEAM_SPECIFIC_MODELS_AVAILABLE']:
-            try:
-                logger.info("Takım-spesifik tahmin modelleri yükleniyor...")
-                self.team_specific_predictor = TeamSpecificPredictor()
-                logger.info("Takım-spesifik tahmin modelleri başarıyla yüklendi.")
-            except Exception as e:
-                logger.error(f"Takım-spesifik tahmin modelleri yüklenirken hata: {str(e)}")
-                globals()['TEAM_SPECIFIC_MODELS_AVAILABLE'] = False
-                
-        # Özelleştirilmiş modeller (düşük, orta ve yüksek skorlu maçlar için)
-        if 'SPECIALIZED_MODELS_AVAILABLE' in globals() and globals()['SPECIALIZED_MODELS_AVAILABLE']:
-            try:
-                logger.info("Özelleştirilmiş tahmin modelleri (düşük/orta/yüksek skorlu maçlar) yükleniyor...")
-                self.specialized_models = SpecializedModels()
-                logger.info("Özelleştirilmiş tahmin modelleri başarıyla yüklendi.")
-            except Exception as e:
-                logger.error(f"Özelleştirilmiş tahmin modelleri yüklenirken hata: {str(e)}")
-                globals()['SPECIALIZED_MODELS_AVAILABLE'] = False
-                
-        # Gelişmiş tahmin faktörleri
-        if 'ENHANCED_FACTORS_AVAILABLE' in globals() and globals()['ENHANCED_FACTORS_AVAILABLE']:
-            try:
-                logger.info("Gelişmiş tahmin faktörleri yükleniyor...")
                 self.enhanced_factors = get_enhanced_factors()
-                logger.info("Gelişmiş tahmin faktörleri başarıyla yüklendi.")
+                logger.info("Enhanced prediction factors loaded successfully")
             except Exception as e:
-                logger.error(f"Gelişmiş tahmin faktörleri yüklenirken hata: {str(e)}")
-                globals()['ENHANCED_FACTORS_AVAILABLE'] = False
-                
-        # Bağımsız tahmin modelleri
-        if 'INDEPENDENT_MODELS_AVAILABLE' in globals() and globals()['INDEPENDENT_MODELS_AVAILABLE']:
-            try:
-                logger.info("Bağımsız tahmin modelleri yükleniyor...")
-                self.independent_models = IndependentPredictionModels()
-                logger.info("Bağımsız tahmin modelleri başarıyla yüklendi.")
-            except Exception as e:
-                logger.error(f"Bağımsız tahmin modelleri yüklenirken hata: {str(e)}")
-                globals()['INDEPENDENT_MODELS_AVAILABLE'] = False
+                logger.error(f"Error loading enhanced factors: {str(e)}")
+                FEATURE_FLAGS['ENHANCED_FACTORS_AVAILABLE'] = False
         
-        # Gol Trend İvmesi Analizi
-        if 'GOAL_TREND_ANALYZER_AVAILABLE' in globals() and globals()['GOAL_TREND_ANALYZER_AVAILABLE']:
+        # Goal trend analyzer
+        if FEATURE_FLAGS['GOAL_TREND_ANALYZER_AVAILABLE']:
             try:
-                logger.info("Gol Trend İvmesi Analiz modülü yükleniyor...")
                 self.goal_trend_analyzer = get_goal_trend_analyzer()
-                logger.info("Gol Trend İvmesi Analiz modülü başarıyla yüklendi.")
+                logger.info("Goal trend analyzer loaded successfully")
             except Exception as e:
-                logger.error(f"Gol Trend İvmesi Analiz modülü yüklenirken hata: {str(e)}")
-                globals()['GOAL_TREND_ANALYZER_AVAILABLE'] = False
+                logger.error(f"Error loading goal trend analyzer: {str(e)}")
+                FEATURE_FLAGS['GOAL_TREND_ANALYZER_AVAILABLE'] = False
 
     def load_cache(self):
-        """Daha önce yapılan tahminleri yükle"""
+        """Optimized cache loading with error handling"""
         try:
             if os.path.exists('predictions_cache.json'):
                 with open('predictions_cache.json', 'r', encoding='utf-8') as f:
                     self.predictions_cache = json.load(f)
-                logger.info(f"Tahmin önbelleği yüklendi: {len(self.predictions_cache)} tahmin")
-        except Exception as e:
-            logger.error(f"Tahmin önbelleği yüklenirken hata: {str(e)}")
-
-    def clear_cache(self):
-        """Tahmin önbelleğini temizle"""
-        try:
-            # Önbelleği sıfırla
+                
+                # Clean old entries on load
+                self._clean_old_cache_entries()
+                logger.info(f"Cache loaded: {len(self.predictions_cache)} predictions")
+        except (json.JSONDecodeError, IOError) as e:
+            logger.error(f"Cache loading error: {str(e)}")
             self.predictions_cache = {}
 
-            # Önbellek dosyasını güvenli bir şekilde temizle
-            try:
-                with open('predictions_cache.json', 'w', encoding='utf-8') as f:
-                    json.dump({}, f, ensure_ascii=False)
-                logger.info("Önbellek dosyası başarıyla temizlendi.")
-            except Exception as cache_file_error:
-                logger.error(f"Önbellek dosyası yazılırken hata: {str(cache_file_error)}")
-                # Dosya yazma hatası olsa bile devam et
+    def _clean_old_cache_entries(self):
+        """Remove old cache entries to maintain performance"""
+        if len(self.predictions_cache) <= self.cache_max_entries:
+            return
+            
+        # Sort by timestamp and keep only recent entries
+        current_time = datetime.now().timestamp()
+        entries_to_remove = []
+        
+        for key, value in self.predictions_cache.items():
+            if isinstance(value, dict) and 'timestamp' in value:
+                age = current_time - value['timestamp']
+                if age > self.cache_max_age:
+                    entries_to_remove.append(key)
+        
+        # Remove old entries
+        for key in entries_to_remove:
+            del self.predictions_cache[key]
+        
+        # If still too many, keep only the most recent ones
+        if len(self.predictions_cache) > self.cache_max_entries:
+            sorted_items = sorted(
+                self.predictions_cache.items(),
+                key=lambda x: x[1].get('timestamp', 0) if isinstance(x[1], dict) else 0,
+                reverse=True
+            )
+            self.predictions_cache = dict(sorted_items[:self.cache_max_entries])
+        
+        logger.info(f"Cache cleaned: {len(entries_to_remove)} old entries removed")
 
-            logger.info("Önbellek temizlendi, yeni tahminler yapılabilir.")
+    def clear_cache(self):
+        """Optimized cache clearing"""
+        self.predictions_cache.clear()
+        try:
+            with open('predictions_cache.json', 'w', encoding='utf-8') as f:
+                json.dump({}, f)
+            logger.info("Cache cleared successfully")
             return True
-        except Exception as e:
-            logger.error(f"Önbellek temizlenirken hata: {str(e)}")
+        except IOError as e:
+            logger.error(f"Cache clear error: {str(e)}")
             return False
 
     def save_cache(self):
-        """Yapılan tahminleri kaydet - önbellek değişime uğradıysa"""
+        """Optimized cache saving with JSON serialization"""
+        if not self._cache_modified:
+            return
+        
         try:
-            # Önbellek değiştirilmediyse kaydetmeye gerek yok - performans iyileştirmesi
-            if not self._cache_modified:
-                logger.debug("Önbellek değişmediği için kaydetmeye gerek yok")
-                return
+            # Optimized numpy to python conversion
+            serializable_cache = self._make_json_serializable(self.predictions_cache)
             
-            # NumPy değerlerini JSON uyumlu değerlere dönüştür
-            def numpy_to_python(obj):
-                try:
-                    # NumPy modülü varsa numpy tiplerini kontrol et
-                    if 'numpy' in sys.modules:
-                        import numpy as np
-                        if isinstance(obj, (np.integer, np.int32, np.int64)):
-                            return int(obj)
-                        elif isinstance(obj, (np.floating, np.float32, np.float64)):
-                            return float(obj)
-                        elif isinstance(obj, np.ndarray):
-                            return obj.tolist()
-                    
-                    # Python native tiplerini işle
-                    if isinstance(obj, list):
-                        return [numpy_to_python(item) for item in obj]
-                    elif isinstance(obj, dict):
-                        return {key: numpy_to_python(value) for key, value in obj.items()}
-                    
-                    return obj
-                except Exception:
-                    # Herhangi bir hata durumunda orijinal objeyi döndür
-                    return obj
-                
             with open('predictions_cache.json', 'w', encoding='utf-8') as f:
-                json.dump(numpy_to_python(self.predictions_cache), f, ensure_ascii=False, indent=2)
+                json.dump(serializable_cache, f, ensure_ascii=False, separators=(',', ':'))
             
-            logger.info(f"Tahmin önbelleği kaydedildi: {len(self.predictions_cache)} tahmin")
-            
-            # Önbellek kaydedildiği için değişiklik durumunu sıfırla
+            logger.info(f"Cache saved: {len(self.predictions_cache)} predictions")
             self._cache_modified = False
-        except Exception as e:
-            logger.error(f"Tahmin önbelleği kaydedilirken hata: {str(e)}")
+        except (IOError, TypeError) as e:
+            logger.error(f"Cache save error: {str(e)}")
 
+    def _make_json_serializable(self, obj):
+        """Optimized JSON serialization"""
+        if hasattr(np, 'integer') and isinstance(obj, (np.integer, np.int32, np.int64)):
+            return int(obj)
+        elif hasattr(np, 'floating') and isinstance(obj, (np.floating, np.float32, np.float64)):
+            return float(obj)
+        elif hasattr(np, 'ndarray') and isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, dict):
+            return {key: self._make_json_serializable(value) for key, value in obj.items()}
+        elif isinstance(obj, list):
+            return [self._make_json_serializable(item) for item in obj]
+        return obj
+
+    @lru_cache(maxsize=128)
     def is_big_team(self, team_name):
-        """Büyük takım kontrolü"""
-        big_teams = [
-            # İspanya büyükleri
-            'Real Madrid', 'Barcelona', 'Atletico Madrid', 'Real Sociedad', 'Villarreal',
-            
-            # Almanya büyükleri
-            'Bayern Munich', 'Borussia Dortmund', 'RB Leipzig', 'Bayer Leverkusen', 'Eintracht Frankfurt',
-            
-            # İngiltere büyükleri
-            'Manchester City', 'Manchester United', 'Liverpool', 'Chelsea', 'Arsenal', 'Tottenham', 'West Ham', 'Aston Villa', 'Brighton',
-            
-            # Fransa büyükleri
-            'PSG', 'Lille', 'Monaco', 'Lyon', 'Marseille', 'Stade Rennes',
-            
-            # İtalya büyükleri
-            'Inter', 'Milan', 'Juventus', 'Napoli', 'Roma', 'Lazio', 'Atalanta', 'Bologna',
-            
-            # Türkiye büyükleri
-            'Galatasaray', 'Fenerbahce', 'Besiktas', 'Trabzonspor',
-            
-            # Portekiz büyükleri
-            'Benfica', 'Porto', 'Sporting', 'Braga',
-            
-            # Hollanda büyükleri
-            'Ajax', 'PSV', 'Feyenoord', 'AZ Alkmaar',
-            
-            # Belçika büyükleri
-            'Club Brugge', 'Royal Antwerp', 'Anderlecht', 'Gent',
-            
-            # İskoçya büyükleri
-            'Celtic', 'Rangers',
-            
-            # Yunanistan büyükleri
-            'Olympiacos', 'Panathinaikos', 'AEK Athens', 'PAOK',
-            
-            # İsviçre büyükleri
-            'Young Boys', 'Basel', 'Servette',
-            
-            # Avusturya büyükleri
-            'Red Bull Salzburg', 'Sturm Graz', 'Rapid Wien',
-            
-            # Çek Cumhuriyeti büyükleri
-            'Slavia Prague', 'Sparta Prague', 'Viktoria Plzen',
-            
-            # Ukrayna büyükleri
-            'Shakhtar Donetsk', 'Dynamo Kyiv',
-            
-            # Hırvatistan büyükleri
-            'Dinamo Zagreb', 'Hajduk Split'
-        ]
-        return team_name in big_teams
+        """Optimized big team check using cached frozenset"""
+        return team_name in BIG_TEAMS
     def apply_team_specific_adjustments(self, home_team_id, away_team_id, home_team_name, away_team_name, 
                                    home_goals, away_goals, home_form=None, away_form=None, use_goal_trend_analysis=True):
         """Takım-spesifik tahmin modeli ayarlamaları ve Gol Trend İvmesi analizi"""
@@ -687,28 +647,25 @@ class MatchPredictor:
         return home_goals, away_goals
 
     def load_or_create_models(self):
-        """Sinir ağı modellerini yükle veya oluştur"""
+        """Optimized model loading"""
         try:
-            if os.path.exists('model_home.h5') and os.path.exists('model_away.h5'):
-                logger.info("Önceden eğitilmiş sinir ağı modelleri yükleniyor...")
+            model_files_exist = (os.path.exists('model_home.h5') and 
+                               os.path.exists('model_away.h5'))
+            
+            if model_files_exist and load_model:
+                logger.info("Loading pre-trained neural network models...")
                 self.model_home = load_model('model_home.h5')
                 self.model_away = load_model('model_away.h5')
             else:
-                logger.info("Sinir ağı modelleri oluşturuluyor...")
+                logger.info("Creating new neural network models...")
                 self.model_home = self.build_neural_network(input_dim=self.input_dim)
                 self.model_away = self.build_neural_network(input_dim=self.input_dim)
-                logger.info("Sinir ağı modelleri oluşturuldu.")
+                logger.info("Neural network models created successfully")
         except Exception as e:
-            logger.error(f"Sinir ağı modelleri yüklenirken/oluşturulurken hata: {str(e)}")
-            # Hata durumunda varsayılan modelleri oluştur
+            logger.error(f"Model loading/creation error: {str(e)}")
+            # Fallback to basic models
             self.model_home = self.build_neural_network(input_dim=self.input_dim)
             self.model_away = self.build_neural_network(input_dim=self.input_dim)
-
-    # Düşük gol beklentisi durumları için sabit değerler - DÜZELTİLDİ
-    DUSUK_GOL_BEKLENTI_KARAR_ESIGI = 0.6  # Tek bir takım için düşük gol beklentisi eşiği (DÜŞÜRÜLDÜ)
-    TOPLAM_GOL_DUSUK_ESIK = 1.0  # Toplam gol beklentisi için düşük eşik (DÜŞÜRÜLDÜ)
-    TOPLAM_GOL_ORTA_ESIK = 1.5  # Toplam gol beklentisi için orta eşik (DÜŞÜRÜLDÜ)
-    EV_SAHIBI_GUC_FARKI_ESIGI = 0.3  # Ev sahibi takımın %30'dan daha güçlü olma durumu
     
     def _calculate_kg_var_probability(self, all_home_goals, all_away_goals, home_goals_lambda, away_goals_lambda, home_form=None, away_form=None):
         """
