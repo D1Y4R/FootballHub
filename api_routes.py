@@ -36,8 +36,7 @@ logger = logging.getLogger(__name__)
 # import halfTime_fullTime_predictor
 
 # API Keys
-FOOTBALL_DATA_API_KEY = os.environ.get('FOOTBALL_DATA_API_KEY', '668dd03e0aea41b58fce760cdf4eddc8')
-API_FOOTBALL_KEY = os.environ.get('APIFOOTBALL_API_KEY', '908ca1caaca4f5470f8c9d7f01a02d66fa06d149e77627804796c4f12568a485')
+APIFOOTBALL_API_KEY = os.environ.get('APIFOOTBALL_API_KEY', '908ca1caaca4f5470f8c9d7f01a02d66fa06d149e77627804796c4f12568a485')
 
 # Blueprint definition
 api_v3_bp = Blueprint('api_v3', __name__, url_prefix='/api/v3')
@@ -170,7 +169,7 @@ def get_football_data_fixtures(date):
             'action': 'get_events',
             'from': date,
             'to': date,
-            'APIkey': API_FOOTBALL_KEY
+            'APIkey': APIFOOTBALL_API_KEY
         }
 
         try:
@@ -258,7 +257,7 @@ def get_half_time_stats(match_id):
         params = {
             'action': 'get_events',
             'match_id': match_id,
-            'APIkey': API_FOOTBALL_KEY
+            'APIkey': APIFOOTBALL_API_KEY
         }
 
         logger.info(f"İlk yarı/ikinci yarı gol istatistikleri isteniyor: match_id={match_id}")
@@ -404,7 +403,7 @@ def get_team_stats(team_id):
     """
     try:
         # Takımın son maçlarını al
-        api_key = os.environ.get('API_FOOTBALL_KEY', '908ca1caaca4f5470f8c9d7f01a02d66fa06d149e77627804796c4f12568a485')
+        api_key = APIFOOTBALL_API_KEY
         url = "https://apiv3.apifootball.com/"
         
         # Son 10 maçı çek
@@ -496,7 +495,7 @@ def get_team_matches(team_id):
         params = {
             'action': 'get_events',
             'team_id': team_id,
-            'APIkey': API_FOOTBALL_KEY
+            'APIkey': APIFOOTBALL_API_KEY
         }
         
         try:
@@ -864,7 +863,7 @@ def get_team_stats_api(team_id):
         
         # Önbellekte veri bulunamadıysa devam et
         # Takımın son maçlarını al
-        api_key = os.environ.get('API_FOOTBALL_KEY', '908ca1caaca4f5470f8c9d7f01a02d66fa06d149e77627804796c4f12568a485')
+        api_key = APIFOOTBALL_API_KEY
         url = "https://apiv3.apifootball.com/"
         
         # Son 10 maçı çek (günümüzden 3 yıl öncesine kadar)
