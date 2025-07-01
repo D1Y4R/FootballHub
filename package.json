@@ -1,0 +1,14 @@
+{
+  "name": "football-prediction-app",
+  "version": "1.0.0",
+  "description": "Football match prediction application with machine learning",
+  "main": "main.py",
+  "scripts": {
+    "start": "./start.sh",
+    "install": "pip install -r requirements.txt",
+    "dev": "python main.py"
+  },
+  "keywords": ["football", "prediction", "machine-learning", "flask"],
+  "author": "Football Prediction Team",
+  "license": "MIT"
+}

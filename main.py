@@ -6,6 +6,14 @@ import socket
 from datetime import datetime, timedelta
 import pytz
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    logging.info("Environment variables loaded from .env file")
+except ImportError:
+    logging.warning("python-dotenv not installed, using system environment variables")
+
 # Configure C++ library path for pandas/numpy dependencies
 os.environ['LD_LIBRARY_PATH'] = '/home/runner/.local/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu:' + os.environ.get('LD_LIBRARY_PATH', '')
 from flask import Flask, render_template, jsonify, request, flash, redirect, url_for
