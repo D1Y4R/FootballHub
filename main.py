@@ -6,27 +6,68 @@ import socket
 from datetime import datetime, timedelta
 import pytz
 
-# Import optimized modules first
-from cache_optimizer import cache_manager, cache_metrics
-from optimized_http_client import http_client, api_manager
-from lazy_ml_imports import initialize_lazy_ml_imports
+# Safe imports for optimization modules
+try:
+    from cache_optimizer import cache_manager, cache_metrics
+except ImportError:
+    cache_manager = None
+    cache_metrics = None
 
-# Initialize lazy loading for better performance
-ml_imports = initialize_lazy_ml_imports(preload_critical=True)
+try:
+    from optimized_http_client import http_client, api_manager
+except ImportError:
+    import requests
+    class BasicHTTPClient:
+        def get(self, url, params=None, headers=None, timeout=30):
+            return requests.get(url, params=params, headers=headers, timeout=timeout)
+    http_client = BasicHTTPClient()
+    api_manager = None
+
+try:
+    from lazy_ml_imports import initialize_lazy_ml_imports
+    ml_imports = initialize_lazy_ml_imports(preload_critical=True)
+except ImportError:
+    ml_imports = None
 
 # Configure C++ library path for pandas/numpy dependencies
 os.environ['LD_LIBRARY_PATH'] = '/home/runner/.local/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu:' + os.environ.get('LD_LIBRARY_PATH', '')
 from flask import Flask, render_template, jsonify, request, flash, redirect, url_for
 from flask_caching import Cache
-from match_prediction import MatchPredictor
+# Safe imports for prediction modules
+try:
+    from match_prediction import MatchPredictor
+    predictor_available = True
+except ImportError:
+    MatchPredictor = None
+    predictor_available = False
+
 # Create and load api_routes only after setting up the Flask app
-# This avoids circular imports
 api_v3_bp = None  # Will be set after app creation
-from model_validation import ModelValidator
-from hybrid_kg_service import get_hybrid_kg_prediction
-from dynamic_team_analyzer import DynamicTeamAnalyzer
-from team_performance_updater import TeamPerformanceUpdater
-from self_learning_predictor import SelfLearningPredictor
+
+try:
+    from model_validation import ModelValidator
+except ImportError:
+    ModelValidator = None
+
+try:
+    from hybrid_kg_service import get_hybrid_kg_prediction
+except ImportError:
+    get_hybrid_kg_prediction = None
+
+try:
+    from dynamic_team_analyzer import DynamicTeamAnalyzer
+except ImportError:
+    DynamicTeamAnalyzer = None
+
+try:
+    from team_performance_updater import TeamPerformanceUpdater
+except ImportError:
+    TeamPerformanceUpdater = None
+
+try:
+    from self_learning_predictor import SelfLearningPredictor
+except ImportError:
+    SelfLearningPredictor = None
 
 # Global değişkenler - Modüller arası paylaşım için
 team_analyzer = None
@@ -51,11 +92,29 @@ cache = Cache(app, config=cache_config)
 # API Blueprint'leri kaydet - moved below
 # api_v3_bp will be imported after app creation
 
-# Tahmin modelini oluştur
-predictor = MatchPredictor()
+# Tahmin modelini güvenli oluştur
+if MatchPredictor and predictor_available:
+    try:
+        predictor = MatchPredictor()
+        logger.info("MatchPredictor successfully initialized")
+    except Exception as e:
+        logger.error(f"Error initializing MatchPredictor: {e}")
+        predictor = None
+else:
+    predictor = None
+    logger.warning("MatchPredictor not available")
 
 # Model doğrulama ve değerlendirme için validator oluştur
-model_validator = ModelValidator(predictor)
+if ModelValidator and predictor:
+    try:
+        model_validator = ModelValidator(predictor)
+        logger.info("ModelValidator successfully initialized")
+    except Exception as e:
+        logger.error(f"Error initializing ModelValidator: {e}")
+        model_validator = None
+else:
+    model_validator = None
+    logger.warning("ModelValidator not available")
 
 def get_matches(selected_date=None):
     try:

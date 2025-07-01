@@ -1,0 +1,19 @@
+flask==2.3.3
+gunicorn==21.2.0
+requests==2.31.0
+flask-caching==2.1.0
+pytz==2023.3
+
+# Optional ML dependencies (with fallbacks)
+numpy==1.24.3
+pandas==2.0.3
+scikit-learn==1.3.0
+
+# Optional async HTTP (with fallback)
+aiohttp==3.8.5
+
+# Optional performance monitoring
+psutil==5.9.5
+
+# Development dependencies
+werkzeug==2.3.7
