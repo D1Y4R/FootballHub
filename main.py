@@ -967,18 +967,18 @@ if __name__ == '__main__':
         import socket
         
         port = None
-        # İlk olarak PORT çevre değişkenini dene
+        # İlk olarak PORT çevre değişkenini dene (Render için önemli)
         port_env = os.environ.get('PORT')
         if port_env:
             try:
                 port = int(port_env)
-                logger.info(f"PORT çevre değişkeni bulundu: {port}")
+                logger.info(f"PORT çevre değişkeni bulundu (Render): {port}")
             except ValueError:
                 logger.warning(f"PORT çevre değişkeni geçerli bir sayı değil: {port_env}")
                 port = None
                 
-        # Tercih edilen portları dene
-        preferred_ports = [2222, 8080, 3000]
+        # Tercih edilen portları dene (Render için 10000 öncelikli)
+        preferred_ports = [10000, 2222, 8080, 3000]
         
         # PORT çevre değişkeni geçerli değilse tercih edilen portları dene
         if port is None:

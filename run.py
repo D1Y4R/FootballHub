@@ -35,8 +35,8 @@ if __name__ == '__main__':
         # Import the Flask app
         from main import app
         
-        # Get port from environment or use 2222 (CodeSandbox default)
-        port = int(os.environ.get('PORT', 2222))
+        # Get port from environment (Render sets this automatically)
+        port = int(os.environ.get('PORT', 10000))
         
         print(f"🚀 Starting Football Prediction App on port {port}")
         print(f"📍 URL: http://localhost:{port}")
