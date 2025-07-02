@@ -14,10 +14,31 @@ try:
 except ImportError:
     logging.warning("python-dotenv not installed, using system environment variables")
 
+# Use safe imports to prevent dependency issues
+try:
+    from fixed_safe_imports import safe_import_numpy, safe_import_pandas
+    np = safe_import_numpy()
+    pd = safe_import_pandas()
+    logging.info("Using safe imports for numpy and pandas")
+except ImportError:
+    logging.warning("Safe imports not available, using standard imports")
+
 # Configure C++ library path for pandas/numpy dependencies
 os.environ['LD_LIBRARY_PATH'] = '/home/runner/.local/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu:' + os.environ.get('LD_LIBRARY_PATH', '')
 from flask import Flask, render_template, jsonify, request, flash, redirect, url_for
-from flask_caching import Cache
+
+# Safe import for Flask-Caching
+try:
+    from flask_caching import Cache
+except ImportError:
+    logging.warning("flask-caching not available, using no-op cache")
+    class Cache:
+        def __init__(self, *args, **kwargs):
+            pass
+        def cached(self, *args, **kwargs):
+            def decorator(f):
+                return f
+            return decorator
 from match_prediction import MatchPredictor
 # Create and load api_routes only after setting up the Flask app
 # This avoids circular imports

@@ -4,9 +4,11 @@
   "description": "Football match prediction application with machine learning",
   "main": "main.py",
   "scripts": {
-    "start": "./start.sh",
+    "start": "python3 codesandbox_start.py",
     "install": "pip install -r requirements.txt",
-    "dev": "python main.py"
+    "dev": "python main.py",
+    "start-simple": "python3 run.py",
+    "start-original": "./start.sh"
   },
   "keywords": ["football", "prediction", "machine-learning", "flask"],
   "author": "Football Prediction Team",
