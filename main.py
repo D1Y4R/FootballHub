@@ -889,7 +889,7 @@ def find_available_port(preferred_ports=None):
     # Hiç tercih edilen port belirtilmemişse varsayılan listeyi kullan
     if preferred_ports is None:
         # Sırasıyla denenecek portlar
-        preferred_ports = [80, 8080, 5000, 3000, 8000, 8888, 9000]
+        preferred_ports = [2222, 80, 8080, 3000, 8000, 8888, 9000]
     
     # Önce çevre değişkeninden PORT değerini kontrol et
     env_port = os.environ.get('PORT')
@@ -978,7 +978,7 @@ if __name__ == '__main__':
                 port = None
                 
         # Tercih edilen portları dene
-        preferred_ports = [8080, 3000, 5000]
+        preferred_ports = [2222, 8080, 3000]
         
         # PORT çevre değişkeni geçerli değilse tercih edilen portları dene
         if port is None:
@@ -1019,12 +1019,12 @@ if __name__ == '__main__':
         
     except Exception as e:
         logger.error(f"Uygulama başlatılırken kritik hata: {str(e)}")
-        # Son çare - 5000 portunu güvenli modda dene
+        # Son çare - 2222 portunu güvenli modda dene
         try:
-            logger.info("Son çare: 5000 portu güvenli modda deneniyor...")
-            print("Son çare: 5000 portu güvenli modda deneniyor...")
+            logger.info("Son çare: 2222 portu güvenli modda deneniyor...")
+            print("Son çare: 2222 portu güvenli modda deneniyor...")
             # Debug modunu kapatarak dene
-            app.run(host='0.0.0.0', port=5000, debug=False)
+            app.run(host='0.0.0.0', port=2222, debug=False)
         except Exception as final_e:
             logger.error(f"Son çare girişimi de başarısız: {str(final_e)}")
             print(f"Uygulama başlatılamadı. Hata: {str(final_e)}")

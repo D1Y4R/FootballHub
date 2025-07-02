@@ -55,7 +55,7 @@ python3 -m pip --version
 
 Uygulama çalıştıktan sonra:
 - Ana sayfa: Browser preview'da görünecek
-- Port: 5000 (otomatik)
+- Port: 2222 (CodeSandbox default)
 
 ## 🔍 Sorun Giderme
 

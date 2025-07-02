@@ -6,7 +6,7 @@ packages = ["cairo", "ffmpeg-full", "freetype", "gcc", "ghostscript", "glibc", "
 
 [deployment]
 deploymentTarget = "autoscale"
-run = ["gunicorn", "--bind", "0.0.0.0:5000", "main:app"]
+run = ["gunicorn", "--bind", "0.0.0.0:2222", "main:app"]
 
 [workflows]
 runButton = "Project"
@@ -26,9 +26,9 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "gunicorn --bind 0.0.0.0:5000 --reuse-port --reload main:app"
-waitForPort = 5000
+args = "gunicorn --bind 0.0.0.0:2222 --reuse-port --reload main:app"
+waitForPort = 2222
 
 [[ports]]
-localPort = 5000
+localPort = 2222
 externalPort = 80

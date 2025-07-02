@@ -43,10 +43,10 @@ export PATH="$HOME/.local/bin:$PATH"
 # Try different methods to start the server
 if command -v gunicorn >/dev/null 2>&1; then
     echo "Using gunicorn..."
-    gunicorn --bind 0.0.0.0:5000 main:app --timeout 120 --workers 1 --preload
+    gunicorn --bind 0.0.0.0:2222 main:app --timeout 120 --workers 1 --preload
 elif [ -f "$HOME/.local/bin/gunicorn" ]; then
     echo "Using user-installed gunicorn..."
-    $HOME/.local/bin/gunicorn --bind 0.0.0.0:5000 main:app --timeout 120 --workers 1 --preload
+    $HOME/.local/bin/gunicorn --bind 0.0.0.0:2222 main:app --timeout 120 --workers 1 --preload
 elif command -v python3 >/dev/null 2>&1; then
     echo "Using python3 directly..."
     python3 run.py
