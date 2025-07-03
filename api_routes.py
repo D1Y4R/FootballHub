@@ -36,14 +36,8 @@ logger = logging.getLogger(__name__)
 # import halfTime_fullTime_predictor
 
 # API Keys
-FOOTBALL_DATA_API_KEY = os.environ.get('FOOTBALL_DATA_API_KEY')
-API_FOOTBALL_KEY = os.environ.get('APIFOOTBALL_API_KEY')
-
-# Log warnings if API keys are missing
-if not FOOTBALL_DATA_API_KEY:
-    logger.warning("FOOTBALL_DATA_API_KEY environment variable not set")
-if not API_FOOTBALL_KEY:
-    logger.warning("APIFOOTBALL_API_KEY environment variable not set")
+FOOTBALL_DATA_API_KEY = os.environ.get('FOOTBALL_DATA_API_KEY', '668dd03e0aea41b58fce760cdf4eddc8')
+API_FOOTBALL_KEY = os.environ.get('APIFOOTBALL_API_KEY', 'aa2b2ffba35e4c25666961de6fd2f51419adeb32cc9d56394012f8e5067682df')
 
 # Blueprint definition
 api_v3_bp = Blueprint('api_v3', __name__, url_prefix='/api/v3')
@@ -179,15 +173,8 @@ def get_football_data_fixtures(date):
             'APIkey': API_FOOTBALL_KEY
         }
 
-        try:
-            response = requests.get(url, params=params, timeout=30)
-        except requests.exceptions.Timeout:
-            logger.error("Request timeout in get_football_data_fixtures")
-            response = None
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Request failed in get_football_data_fixtures: {str(e)}")
-            response = None
-        if response and response.status_code == 200 and isinstance(response.json(), list) and len(response.json()) > 0:
+        response = requests.get(url, params=params)
+        if response.status_code == 200 and isinstance(response.json(), list) and len(response.json()) > 0:
             # API-Football verisi başarıyla alındı, converter'a gönder
             return convert_apifootball_to_standard(response.json())
 
@@ -196,14 +183,7 @@ def get_football_data_fixtures(date):
         headers = {'X-Auth-Token': FOOTBALL_DATA_API_KEY}
         params = {"date": date}
 
-        try:
-            response = requests.get(url, headers=headers, params=params, timeout=30)
-        except requests.exceptions.Timeout:
-            logger.error("Request timeout for football-data.org API")
-            return jsonify({"errors": True, "message": "Request timeout"}), 500
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Request failed for football-data.org API: {str(e)}")
-            return jsonify({"errors": True, "message": str(e)}), 500
+        response = requests.get(url, headers=headers, params=params)
         data = response.json()
 
         # Convert football-data.org format to api-football format
@@ -268,14 +248,7 @@ def get_half_time_stats(match_id):
         }
 
         logger.info(f"İlk yarı/ikinci yarı gol istatistikleri isteniyor: match_id={match_id}")
-        try:
-            response = requests.get(url, params=params, timeout=30)
-        except requests.exceptions.Timeout:
-            logger.error(f"Request timeout for match stats: {match_id}")
-            return jsonify({"errors": True, "message": "Request timeout"}), 500
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Request failed for match stats {match_id}: {str(e)}")
-            return jsonify({"errors": True, "message": str(e)}), 500
+        response = requests.get(url, params=params)
         
         if response.status_code != 200:
             logger.error(f"API-Football error getting match stats: {response.status_code}")
@@ -410,10 +383,7 @@ def get_team_stats(team_id):
     """
     try:
         # Takımın son maçlarını al
-        api_key = os.environ.get('API_FOOTBALL_KEY')
-        if not api_key:
-            logger.warning("API_FOOTBALL_KEY environment variable not set")
-            return jsonify([])
+        api_key = os.environ.get('API_FOOTBALL_KEY', '39bc8dd65153ff5c7c0f37b4939009de04f4a70c593ee1aea0b8f70dd33268c0')
         url = "https://apiv3.apifootball.com/"
         
         # Son 10 maçı çek
@@ -425,15 +395,7 @@ def get_team_stats(team_id):
             'APIkey': api_key
         }
         
-        try:
-            response = requests.get(url, params=params, timeout=30)
-        except requests.exceptions.Timeout:
-            logger.error(f"Request timeout for team stats: {team_id}")
-            return jsonify([])
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Request failed for team stats {team_id}: {str(e)}")
-            return jsonify([])
-            
+        response = requests.get(url, params=params)
         if response.status_code != 200:
             return jsonify([])
             
@@ -508,28 +470,7 @@ def get_team_matches(team_id):
             'APIkey': API_FOOTBALL_KEY
         }
         
-        try:
-            response = requests.get(url, params=params, timeout=30)
-        except requests.exceptions.Timeout:
-            logger.error(f"Request timeout for team matches: {team_id}")
-            return jsonify({
-                "errors": True, 
-                "message": "Request timeout",
-                "team_id": str(team_id),
-                "team_name": team_name,
-                "matches": [],
-                "total_matches": 0
-            }), 500
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Request failed for team matches {team_id}: {str(e)}")
-            return jsonify({
-                "errors": True, 
-                "message": str(e),
-                "team_id": str(team_id),
-                "team_name": team_name,
-                "matches": [],
-                "total_matches": 0
-            }), 500
+        response = requests.get(url, params=params)
         
         if response.status_code != 200:
             logger.error(f"Error getting team matches: {response.status_code}")
@@ -873,18 +814,7 @@ def get_team_stats_api(team_id):
         
         # Önbellekte veri bulunamadıysa devam et
         # Takımın son maçlarını al
-        api_key = os.environ.get('API_FOOTBALL_KEY')
-        if not api_key:
-            logger.warning("API_FOOTBALL_KEY environment variable not set for get_team_matches")
-            return jsonify({
-                "team_id": str(team_id_value),
-                "team_name": team_name,
-                "status": "API key not configured",
-                "message": "API key missing",
-                "matches": [],
-                "total_matches": 0,
-                "form": {"wins": 0, "draws": 0, "losses": 0, "goals_scored": 0, "goals_conceded": 0}
-            }), 202
+        api_key = os.environ.get('API_FOOTBALL_KEY', '39bc8dd65153ff5c7c0f37b4939009de04f4a70c593ee1aea0b8f70dd33268c0')
         url = "https://apiv3.apifootball.com/"
         
         # Son 10 maçı çek (günümüzden 3 yıl öncesine kadar)
@@ -1016,10 +946,7 @@ def get_team_stats_backup(team_id):
     """
     try:
         # Alternatif API için API anahtarı
-        api_key = os.environ.get('FOOTBALL_DATA_API_KEY')
-        if not api_key:
-            logger.warning("FOOTBALL_DATA_API_KEY environment variable not set")
-            return jsonify({"errors": True, "message": "API key not configured"}), 500
+        api_key = os.environ.get('FOOTBALL_DATA_API_KEY', '85c1a3c16af54ce687b76479261b6e73')
         headers = {'X-Auth-Token': api_key}
         
         # Football Data API kullanarak takımın son maçlarını al

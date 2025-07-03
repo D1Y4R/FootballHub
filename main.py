@@ -30,9 +30,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SESSION_SECRET") or "dev-key-change-in-production"
-if not os.environ.get("SESSION_SECRET"):
-    logger.warning("SESSION_SECRET environment variable not set. Using default key for development only.")
+app.secret_key = os.environ.get("SESSION_SECRET")
 
 # Flask-Caching konfigürasyonu
 cache_config = {
@@ -61,10 +59,7 @@ def get_matches(selected_date=None):
             selected_date = datetime.now().strftime('%Y-%m-%d')
 
         matches = []
-        api_key = os.environ.get('APIFOOTBALL_API_KEY')
-        if not api_key:
-            logger.warning("APIFOOTBALL_API_KEY environment variable not set. Match fetching may fail.")
-            return {'leagues': []}
+        api_key = os.environ.get('APIFOOTBALL_API_KEY', 'aa2b2ffba35e4c25666961de6fd2f51419adeb32cc9d56394012f8e5067682df')
 
         # Get matches from APIFootball
         url = "https://apiv3.apifootball.com/"
@@ -78,14 +73,7 @@ def get_matches(selected_date=None):
         logger.info(f"Sending API request to {url} with params: {params}")
 
         logger.info(f"Fetching matches for date: {selected_date}")
-        try:
-            response = requests.get(url, params=params, timeout=30)
-        except requests.exceptions.Timeout:
-            logger.error("Request timeout while fetching matches")
-            return {'leagues': []}
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Request failed while fetching matches: {str(e)}")
-            return {'leagues': []}
+        response = requests.get(url, params=params)
         logger.debug(f"API Response status: {response.status_code}")
         logger.debug(f"API Response content: {response.content}") # Added logging for debugging
 
@@ -288,10 +276,7 @@ def index():
 def team_stats(team_id):
     try:
         # APIFootball API anahtarı
-        api_key = os.environ.get('APIFOOTBALL_API_KEY')
-        if not api_key:
-            logger.warning("APIFOOTBALL_API_KEY environment variable not set")
-            return jsonify([])
+        api_key = os.environ.get('APIFOOTBALL_API_KEY', 'aa2b2ffba35e4c25666961de6fd2f51419adeb32cc9d56394012f8e5067682df')
 
         # Son 6 aylık maçları al
         end_date = datetime.now()
@@ -308,14 +293,7 @@ def team_stats(team_id):
         }
 
         logger.debug(f"Fetching team stats for team_id: {team_id}")
-        try:
-            response = requests.get(url, params=params, timeout=30)
-        except requests.exceptions.Timeout:
-            logger.error(f"Request timeout for team stats: {team_id}")
-            return jsonify([])
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Request failed for team stats {team_id}: {str(e)}")
-            return jsonify([])
+        response = requests.get(url, params=params)
         logger.debug(f"API Response status: {response.status_code}")
 
         if response.status_code == 200:
@@ -372,14 +350,7 @@ def get_league_standings(league_id):
         headers = {'X-Auth-Token': api_key}
 
         logger.info(f"Making API request to {url}")
-        try:
-            response = requests.get(url, headers=headers, timeout=30)
-        except requests.exceptions.Timeout:
-            logger.error(f"Request timeout for league standings: {league_id}")
-            return None
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Request failed for league standings {league_id}: {str(e)}")
-            return None
+        response = requests.get(url, headers=headers)
 
         # Yanıt başlıklarını kontrol et
         logger.info(f"API Response headers: {response.headers}")
