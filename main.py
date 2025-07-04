@@ -1,11 +1,25 @@
 import logging
 import os
-import requests
 import threading
 import socket
 import time
 from datetime import datetime, timedelta
-import pytz
+
+# Optional import for timezone handling
+try:
+    import pytz
+    PYTZ_AVAILABLE = True
+except ImportError:
+    PYTZ_AVAILABLE = False
+    pytz = None
+
+# Optional import for API requests
+try:
+    import requests
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
+    requests = None
 
 # Configure C++ library path for pandas/numpy dependencies
 os.environ['LD_LIBRARY_PATH'] = '/home/runner/.local/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu:' + os.environ.get('LD_LIBRARY_PATH', '')
@@ -145,8 +159,11 @@ setup_performance_monitoring(app)
 # Legacy functions for backward compatibility
 # Legacy functions for backward compatibility
 def get_predictor():
-    """Legacy function - now uses LazyModelManager"""
-    return model_manager.get_model('match_predictor')
+    """Legacy function - now uses LazyModelManager with fallback"""
+    predictor = model_manager.get_model('match_predictor')
+    if predictor is None:
+        logger.error("No predictor available, returning None")
+    return predictor
 
 def get_model_validator():
     """Legacy function - now uses LazyModelManager"""
@@ -155,9 +172,14 @@ def get_model_validator():
 @performance_monitor("get_matches")
 def get_matches(selected_date=None):
     try:
-        # Create timezone objects
-        utc = pytz.UTC
-        turkey_tz = pytz.timezone('Europe/Istanbul')
+        # Create timezone objects (fallback if pytz not available)
+        if PYTZ_AVAILABLE and pytz:
+            utc = pytz.UTC
+            turkey_tz = pytz.timezone('Europe/Istanbul')
+        else:
+            # Use naive datetime objects when pytz is not available
+            utc = None
+            turkey_tz = None
 
         if not selected_date:
             selected_date = datetime.now().strftime('%Y-%m-%d')
@@ -398,6 +420,10 @@ def team_stats(team_id):
             'APIkey': api_key
         }
 
+        if not REQUESTS_AVAILABLE or requests is None:
+            logger.warning("Requests module not available, returning empty team stats")
+            return jsonify([])
+        
         logger.debug(f"Fetching team stats for team_id: {team_id}")
         response = requests.get(url, params=params)
         logger.debug(f"API Response status: {response.status_code}")
@@ -455,6 +481,10 @@ def get_league_standings(league_id):
         url = f"https://api.football-data.org/v4/competitions/{league_id}/standings"
         headers = {'X-Auth-Token': api_key}
 
+        if not REQUESTS_AVAILABLE or requests is None:
+            logger.warning("Requests module not available, cannot fetch league standings")
+            return None
+        
         logger.info(f"Making API request to {url}")
         response = requests.get(url, headers=headers)
 
@@ -601,8 +631,17 @@ def predict_match_post():
         if not home_team_id or not away_team_id:
             return jsonify({"error": "Takım ID'leri eksik"}), 400
             
-        # Tahmin yap (lazy loading)
-        prediction = get_predictor().predict_match(
+        # Tahmin yap (lazy loading) - predictor kontrolü ekle
+        predictor = get_predictor()
+        if predictor is None:
+            logger.error("Predictor is None in POST endpoint")
+            return jsonify({
+                "error": "Tahmin sistemi şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin.",
+                "match": f"{home_team_name} vs {away_team_name}",
+                "timestamp": datetime.now().timestamp()
+            }), 503
+        
+        prediction = predictor.predict_match(
             home_team_id, 
             away_team_id, 
             home_team_name, 
@@ -650,8 +689,17 @@ def predict_match(home_team_id, away_team_id):
         logger.info(f"Yeni tahmin yapılıyor. Force update: {force_update}, Takımlar: {home_team_name} vs {away_team_name}")
             
         try:
-            # Tahmin yap (lazy loading)
-            prediction = get_predictor().predict_match(home_team_id, away_team_id, home_team_name, away_team_name, force_update)
+            # Tahmin yap (lazy loading) - predictor kontrolü ekle
+            predictor = get_predictor()
+            if predictor is None:
+                logger.error("Predictor is None, cannot make prediction")
+                return jsonify({
+                    "error": "Tahmin sistemi şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin.",
+                    "match": f"{home_team_name} vs {away_team_name}",
+                    "timestamp": datetime.now().timestamp()
+                }), 503
+            
+            prediction = predictor.predict_match(home_team_id, away_team_id, home_team_name, away_team_name, force_update)
             
             # Yeni tahmini önbelleğe ekle (10 dakika süreyle)
             if prediction and (isinstance(prediction, dict) and not prediction.get('error')):
@@ -819,14 +867,21 @@ def clear_predictions_cache():
 def health_check():
     """Enhanced health check endpoint with optimization metrics"""
     import time
-    import psutil
     import os
     
     try:
-        # Get basic system info
-        cpu_percent = psutil.cpu_percent(interval=0.1)  # Faster check
-        memory = psutil.virtual_memory()
-        disk = psutil.disk_usage('/')
+        # Get basic system info (if psutil is available)
+        if model_manager.get_memory_usage().get('cpu_percent') != 'N/A':
+            # Use model_manager's psutil access
+            memory_info = model_manager.get_memory_usage()
+            cpu_percent = memory_info.get('cpu_percent', 0)
+            memory_percent = memory_info.get('memory_percent', 0)
+            disk_percent = 50  # Fallback value
+        else:
+            # Fallback when psutil is not available
+            cpu_percent = 0
+            memory_percent = 0
+            disk_percent = 50
         
         # Check optimized services status
         services_status = {
@@ -843,7 +898,7 @@ def health_check():
         model_memory = model_manager.get_memory_usage()
         
         # Determine health status
-        is_healthy = cpu_percent < 80 and memory.percent < 85  # More lenient thresholds
+        is_healthy = cpu_percent < 80 and memory_percent < 85  # More lenient thresholds
         
         health_data = {
             "status": "healthy" if is_healthy else "warning",
@@ -852,10 +907,10 @@ def health_check():
             "startup_time_seconds": time.time() - startup_time,
             "system": {
                 "cpu_percent": cpu_percent,
-                "memory_percent": memory.percent,
-                "memory_available": f"{memory.available / (1024**3):.2f}GB",
-                "disk_percent": disk.percent,
-                "disk_free": f"{disk.free / (1024**3):.2f}GB"
+                "memory_percent": memory_percent,
+                "memory_available": "N/A (monitoring unavailable)",
+                "disk_percent": disk_percent,
+                "disk_free": "N/A (monitoring unavailable)"
             },
             "services": services_status,
             "optimization_metrics": {

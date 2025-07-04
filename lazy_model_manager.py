@@ -6,10 +6,17 @@ On-demand model loading to reduce memory usage and startup time
 import os
 import threading
 import logging
-import psutil
 import time
 from typing import Dict, Any, Optional, Callable
 from functools import wraps
+
+# Optional import for system monitoring
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+    psutil = None
 
 logger = logging.getLogger(__name__)
 
@@ -100,17 +107,28 @@ class LazyModelManager:
     def get_memory_usage(self) -> Dict[str, Any]:
         """Get memory usage information"""
         try:
-            process = psutil.Process()
-            memory_info = process.memory_info()
-            
-            return {
-                'total_memory_mb': memory_info.rss / 1024 / 1024,
-                'loaded_models': len(self.models),
-                'registered_models': len(self.loaders),
-                'failed_models': len([s for s in self.loading_status.values() if s.startswith('error')]),
-                'cpu_percent': psutil.cpu_percent(),
-                'memory_percent': psutil.virtual_memory().percent
-            }
+            if PSUTIL_AVAILABLE and psutil:
+                process = psutil.Process()
+                memory_info = process.memory_info()
+                
+                return {
+                    'total_memory_mb': memory_info.rss / 1024 / 1024,
+                    'loaded_models': len(self.models),
+                    'registered_models': len(self.loaders),
+                    'failed_models': len([s for s in self.loading_status.values() if s.startswith('error')]),
+                    'cpu_percent': psutil.cpu_percent(),
+                    'memory_percent': psutil.virtual_memory().percent
+                }
+            else:
+                # Fallback when psutil is not available
+                return {
+                    'total_memory_mb': 'N/A (psutil not available)',
+                    'loaded_models': len(self.models),
+                    'registered_models': len(self.loaders),
+                    'failed_models': len([s for s in self.loading_status.values() if s.startswith('error')]),
+                    'cpu_percent': 'N/A',
+                    'memory_percent': 'N/A'
+                }
         except Exception as e:
             logger.error(f"Error getting memory usage: {e}")
             return {
@@ -225,13 +243,26 @@ def require_model(model_name: str):
 
 # Helper functions for common models
 def load_match_predictor():
-    """Loader for match predictor model"""
+    """Loader for match predictor model with fallback"""
     try:
+        # Try to load the main predictor first
+        logger.info("Attempting to load main MatchPredictor...")
         from match_prediction import MatchPredictor
-        return MatchPredictor()
-    except ImportError as e:
-        logger.warning(f"Could not import MatchPredictor: {e}")
-        return None
+        predictor = MatchPredictor()
+        logger.info("Main MatchPredictor loaded successfully")
+        return predictor
+    except Exception as e:
+        logger.warning(f"Could not load main MatchPredictor: {e}")
+        try:
+            # Fall back to simple predictor
+            logger.info("Loading SimpleFallbackPredictor as fallback...")
+            from simple_predictor import SimpleFallbackPredictor
+            predictor = SimpleFallbackPredictor()
+            logger.info("SimpleFallbackPredictor loaded successfully")
+            return predictor
+        except Exception as fallback_error:
+            logger.error(f"Could not load fallback predictor: {fallback_error}")
+            return None
 
 def load_model_validator():
     """Loader for model validator"""
