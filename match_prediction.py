@@ -1,9 +1,17 @@
-import logging
+THIS SHOULD BE A LINTER ERRORimport logging
 import json
 import os
 import math
 from datetime import datetime, timedelta
-import requests
+
+# Optional import for requests
+try:
+    import requests
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
+    requests = None
+
 from fixed_safe_imports import safe_import_numpy, safe_import_pandas, safe_import_sklearn, safe_import_tensorflow
 
 # Safe imports for problematic dependencies
@@ -1766,6 +1774,10 @@ class MatchPredictor:
                 'team_id': team_id,
                 'APIkey': self.api_key
             }
+
+            if not REQUESTS_AVAILABLE:
+                logger.warning("requests module not available, returning fallback form data")
+                return self._generate_fallback_form_data(team_id)
 
             response = requests.get(url, params=params)
 
