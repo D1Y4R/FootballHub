@@ -1,4 +1,4 @@
-THIS SHOULD BE A LINTER ERRORimport logging
+import logging
 import os
 import requests
 import threading
@@ -59,7 +59,7 @@ def get_matches(selected_date=None):
             selected_date = datetime.now().strftime('%Y-%m-%d')
 
         matches = []
-        api_key = os.environ.get('APIFOOTBALL_API_KEY', 'aa2b2ffba35e4c25666961de6fd2f51419adeb32cc9d56394012f8e5067682df')
+        api_key = os.environ.get('APIFOOTBALL_API_KEY', '908ca1caaca4f5470f8c9d7f01a02d66fa06d149e77627804796c4f12568a485')
 
         # Get matches from APIFootball
         url = "https://apiv3.apifootball.com/"
@@ -276,7 +276,7 @@ def index():
 def team_stats(team_id):
     try:
         # APIFootball API anahtarı
-        api_key = os.environ.get('APIFOOTBALL_API_KEY', 'aa2b2ffba35e4c25666961de6fd2f51419adeb32cc9d56394012f8e5067682df')
+        api_key = os.environ.get('APIFOOTBALL_API_KEY', '908ca1caaca4f5470f8c9d7f01a02d66fa06d149e77627804796c4f12568a485')
 
         # Son 6 aylık maçları al
         end_date = datetime.now()
