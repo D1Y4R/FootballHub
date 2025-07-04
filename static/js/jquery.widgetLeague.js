@@ -2,7 +2,7 @@
     $.fn.widgetLeague = function(options) {
         const settings = $.extend({
             widgetLiveScoreLocation: '#widgetLiveScore',
-            apiKey: '013856bafc4f8aa6387fceb53d7a9c91ea1d575f10c32865d9f8a75f60dac3bc',
+            apiKey: '908ca1caaca4f5470f8c9d7f01a02d66fa06d149e77627804796c4f12568a485',
             refreshInterval: 60000, // 1 minute
         }, options);
 
