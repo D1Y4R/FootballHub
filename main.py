@@ -24,15 +24,74 @@ except ImportError:
         def set(self, key, value, timeout=None): pass
         def clear(self): return True
     Cache = MockCache
-from match_prediction import MatchPredictor
+# Safe imports for CodeSandbox compatibility
+try:
+    from match_prediction import MatchPredictor
+    MATCH_PREDICTION_AVAILABLE = True
+except ImportError as e:
+    logger.error(f"MatchPredictor import failed: {e}")
+    MATCH_PREDICTION_AVAILABLE = False
+    class MatchPredictor:
+        def __init__(self): 
+            self.predictions_cache = {}
+            logger.warning("Using MatchPredictor fallback")
+        def predict_match(self, *args, **kwargs):
+            return {"error": "MatchPredictor not available", "fallback": True}
+        def clear_cache(self):
+            return True
+
+try:
+    from model_validation import ModelValidator
+    MODEL_VALIDATION_AVAILABLE = True
+except ImportError as e:
+    logger.error(f"ModelValidator import failed: {e}")
+    MODEL_VALIDATION_AVAILABLE = False
+    class ModelValidator:
+        def __init__(self, predictor): 
+            logger.warning("Using ModelValidator fallback")
+
+try:
+    from hybrid_kg_service import get_hybrid_kg_prediction
+    HYBRID_KG_AVAILABLE = True
+except ImportError as e:
+    logger.error(f"HybridKG import failed: {e}")
+    HYBRID_KG_AVAILABLE = False
+    def get_hybrid_kg_prediction(*args, **kwargs):
+        return None
+
+try:
+    from dynamic_team_analyzer import DynamicTeamAnalyzer
+    DYNAMIC_ANALYZER_AVAILABLE = True
+except ImportError as e:
+    logger.error(f"DynamicTeamAnalyzer import failed: {e}")
+    DYNAMIC_ANALYZER_AVAILABLE = False
+    class DynamicTeamAnalyzer:
+        def analyze_and_update(self): pass
+
+try:
+    from team_performance_updater import TeamPerformanceUpdater
+    PERFORMANCE_UPDATER_AVAILABLE = True
+except ImportError as e:
+    logger.error(f"TeamPerformanceUpdater import failed: {e}")
+    PERFORMANCE_UPDATER_AVAILABLE = False
+    class TeamPerformanceUpdater:
+        def __init__(self, analyzer): pass
+        def start(self): pass
+
+try:
+    from self_learning_predictor import SelfLearningPredictor
+    SELF_LEARNING_AVAILABLE = True
+except ImportError as e:
+    logger.error(f"SelfLearningPredictor import failed: {e}")
+    SELF_LEARNING_AVAILABLE = False
+    class SelfLearningPredictor:
+        def __init__(self, analyzer): pass
+        def analyze_predictions_and_results(self):
+            return {"sufficient_data": False}
+
 # Create and load api_routes only after setting up the Flask app
 # This avoids circular imports
 api_v3_bp = None  # Will be set after app creation
-from model_validation import ModelValidator
-from hybrid_kg_service import get_hybrid_kg_prediction
-from dynamic_team_analyzer import DynamicTeamAnalyzer
-from team_performance_updater import TeamPerformanceUpdater
-from self_learning_predictor import SelfLearningPredictor
 
 # Global değişkenler - Modüller arası paylaşım için
 team_analyzer = None
@@ -917,34 +976,51 @@ def find_available_port(preferred_ports=None):
     return 0  # 0 verilirse, sistem otomatik olarak kullanılabilir bir port atar
 
 if __name__ == '__main__':
-    # Dinamik takım analizörünü başlat
-    try:
-        team_analyzer = DynamicTeamAnalyzer()
-        logger.info("Dinamik Takım Analizörü başlatıldı")
-        
-        # Performans verilerini analiz et ve güncelle
-        team_analyzer.analyze_and_update()
-        logger.info("Takım performans analizi tamamlandı")
-        
-        # Kendi kendine öğrenen tahmin modelini başlat
-        self_learning = SelfLearningPredictor(analyzer=team_analyzer)
-        logger.info("Kendi Kendine Öğrenen Tahmin Modeli başlatıldı")
-        
-        # Takım faktörlerini analiz et
-        analysis_result = self_learning.analyze_predictions_and_results()
-        if analysis_result.get('sufficient_data', False):
-            logger.info(f"Model analizi tamamlandı: {analysis_result.get('analyzed_matches', 0)} maç analiz edildi")
-            logger.info(f"Doğruluk: {analysis_result.get('outcome_accuracy', 0):.4f}")
-        else:
-            logger.info("Yeterli doğrulama verisi yok, model analizi atlandı")
+    # Dinamik takım analizörünü başlat (varsa)
+    if DYNAMIC_ANALYZER_AVAILABLE:
+        try:
+            team_analyzer = DynamicTeamAnalyzer()
+            logger.info("Dinamik Takım Analizörü başlatıldı")
             
-        # Performans güncelleyiciyi arkaplanda başlat
-        updater = TeamPerformanceUpdater(analyzer=team_analyzer)
-        updater.start()
-        logger.info("Takım Performans Güncelleyici arkaplanda başlatıldı")
-    except Exception as e:
-        logger.error(f"Dinamik analiz sistemleri başlatılırken hata: {str(e)}")
-        logger.info("Uygulama temel tahmin modelleriyle çalışmaya devam edecek")
+            # Performans verilerini analiz et ve güncelle
+            team_analyzer.analyze_and_update()
+            logger.info("Takım performans analizi tamamlandı")
+            
+        except Exception as e:
+            logger.error(f"Dinamik takım analizörü başlatılırken hata: {str(e)}")
+            team_analyzer = DynamicTeamAnalyzer()  # Fallback version
+    else:
+        team_analyzer = DynamicTeamAnalyzer()  # Fallback version
+        logger.info("Dinamik Takım Analizörü fallback kullanılıyor")
+    
+    # Kendi kendine öğrenen tahmin modelini başlat (varsa)
+    if SELF_LEARNING_AVAILABLE:
+        try:
+            self_learning = SelfLearningPredictor(analyzer=team_analyzer)
+            logger.info("Kendi Kendine Öğrenen Tahmin Modeli başlatıldı")
+            
+            # Takım faktörlerini analiz et
+            analysis_result = self_learning.analyze_predictions_and_results()
+            if analysis_result.get('sufficient_data', False):
+                logger.info(f"Model analizi tamamlandı: {analysis_result.get('analyzed_matches', 0)} maç analiz edildi")
+                logger.info(f"Doğruluk: {analysis_result.get('outcome_accuracy', 0):.4f}")
+            else:
+                logger.info("Yeterli doğrulama verisi yok, model analizi atlandı")
+        except Exception as e:
+            logger.error(f"Kendi kendine öğrenen model başlatılırken hata: {str(e)}")
+    else:
+        logger.info("Kendi kendine öğrenen model fallback kullanılıyor")
+            
+    # Performans güncelleyiciyi arkaplanda başlat (varsa)
+    if PERFORMANCE_UPDATER_AVAILABLE:
+        try:
+            updater = TeamPerformanceUpdater(analyzer=team_analyzer)
+            updater.start()
+            logger.info("Takım Performans Güncelleyici arkaplanda başlatıldı")
+        except Exception as e:
+            logger.error(f"Performans güncelleyici başlatılırken hata: {str(e)}")
+    else:
+        logger.info("Performans güncelleyici fallback kullanılıyor")
     
     # Şimdi api_routes modülündeki blueprint'i içe aktar
     try:
