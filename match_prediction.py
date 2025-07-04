@@ -1,4 +1,4 @@
-THIS SHOULD BE A LINTER ERRORimport logging
+import logging
 import json
 import os
 import math
@@ -3582,8 +3582,8 @@ class MatchPredictor:
             logger.warning(f"=== RANA FK ANALİZ SONU ===")
         
         # Skorlar içinde en çok KG VAR ve KG YOK olan skorları bul
-        kg_var_scores = [(score, count) for score, count in exact_scores.items() if int(score.split('-')[0]) > 0 and int(score.split('-')[1]) > 0]
-        kg_yok_scores = [(score, count) for score, count in exact_scores.items() if int(score.split('-')[0]) == 0 or int(score.split('-')[1]) == 0]
+        kg_var_scores = [(score, count) for score, count in exact_scores.items() if int(float(score.split('-')[0])) > 0 and int(float(score.split('-')[1])) > 0]
+        kg_yok_scores = [(score, count) for score, count in exact_scores.items() if int(float(score.split('-')[0])) == 0 or int(float(score.split('-')[1])) == 0]
         
         # KG VAR/YOK skorlarının toplam olasılıkları
         kg_var_total_prob = sum(count for _, count in kg_var_scores) / simulations if kg_var_scores else 0
