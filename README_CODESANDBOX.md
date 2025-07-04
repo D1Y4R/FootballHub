@@ -5,10 +5,17 @@ Bu uygulama, futbol maçları için gelişmiş tahminler yapan bir Flask web uyg
 ## CodeSandbox'ta Çalıştırma
 
 ### 1. Adım: Dependency'leri Yükle
-Terminal'de aşağıdaki komutu çalıştırın:
+**Minimal kurulum (CodeSandbox için önerilen):**
 ```bash
 pip install -r requirements.txt
 ```
+
+**Eğer disk alanınız varsa ve ML özelliklerini istiyorsanız:**
+```bash
+pip install -r requirements-full.txt
+```
+
+**Not**: CodeSandbox'ta disk alanı sınırlı olduğu için minimal kurulum önerilir.
 
 ### 2. Adım: Uygulamayı Başlat
 Terminal'de aşağıdaki komutu çalıştırın:

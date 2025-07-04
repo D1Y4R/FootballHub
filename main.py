@@ -9,7 +9,21 @@ import pytz
 # Configure C++ library path for pandas/numpy dependencies
 os.environ['LD_LIBRARY_PATH'] = '/home/runner/.local/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu:' + os.environ.get('LD_LIBRARY_PATH', '')
 from flask import Flask, render_template, jsonify, request, flash, redirect, url_for
-from flask_caching import Cache
+# Optional imports for CodeSandbox compatibility
+try:
+    from flask_caching import Cache
+    CACHING_AVAILABLE = True
+except ImportError:
+    CACHING_AVAILABLE = False
+    class MockCache:
+        def __init__(self, app=None, config=None): pass
+        def cached(self, *args, **kwargs): 
+            def decorator(f): return f
+            return decorator
+        def get(self, key): return None
+        def set(self, key, value, timeout=None): pass
+        def clear(self): return True
+    Cache = MockCache
 from match_prediction import MatchPredictor
 # Create and load api_routes only after setting up the Flask app
 # This avoids circular imports
@@ -32,13 +46,18 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET")
 
-# Flask-Caching konfigürasyonu
-cache_config = {
-    "CACHE_TYPE": "SimpleCache",  # Basit bellek içi önbellek
-    "CACHE_DEFAULT_TIMEOUT": 300,  # Varsayılan 5 dakika (300 saniye) önbellek süresi
-    "CACHE_THRESHOLD": 500,        # Maksimum önbellek öğe sayısı
-}
-cache = Cache(app, config=cache_config)
+# Flask-Caching konfigürasyonu (optional for CodeSandbox)
+if CACHING_AVAILABLE:
+    cache_config = {
+        "CACHE_TYPE": "SimpleCache",
+        "CACHE_DEFAULT_TIMEOUT": 300,
+        "CACHE_THRESHOLD": 500,
+    }
+    cache = Cache(app, config=cache_config)
+    logger.info("Flask-Caching enabled")
+else:
+    cache = Cache(app)
+    logger.info("Flask-Caching disabled (using mock cache)")
 
 # API Blueprint'leri kaydet - moved below
 # api_v3_bp will be imported after app creation
@@ -712,7 +731,12 @@ def predictions_page():
 def cache_table():
     """Önbellekteki tahminleri tabloda gösteren sayfa"""
     import json
-    from tabulate import tabulate
+    try:
+        from tabulate import tabulate
+    except ImportError:
+        # Fallback without tabulate
+        def tabulate(data, headers=None):
+            return str(data)
     
     try:
         with open('predictions_cache.json', 'r', encoding='utf-8') as f:
@@ -984,6 +1008,9 @@ if __name__ == '__main__':
         print(f"Uygulama {port} portunda başlatılıyor")
             
         # Uygulamayı çalıştır
+        # Production mode için gunicorn önerilen
+        if os.environ.get('PYTHON_ENV') == 'production':
+            logger.info("Production modunda çalışıyor, gunicorn kullanın: gunicorn -b 0.0.0.0:{port} main:app")
         app.run(host='0.0.0.0', port=port, debug=True)
         
     except Exception as e:
