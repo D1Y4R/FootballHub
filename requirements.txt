@@ -6,6 +6,14 @@ pytz==2023.3
 # Production server (lightweight)
 gunicorn==21.2.0
 
+# Performance & Caching
+flask-caching==2.1.0
+
+# Hash library (fixes murmurhash issues)
+mmh3==4.1.0
+
+# System monitoring
+psutil==5.9.8
+
 # Optional lightweight alternatives (uncomment if needed)
 # numpy==1.24.3
-# flask-caching==2.1.0

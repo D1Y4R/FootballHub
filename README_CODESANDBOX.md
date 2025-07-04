@@ -18,14 +18,27 @@ pip install -r requirements-full.txt
 **Not**: CodeSandbox'ta disk alanı sınırlı olduğu için minimal kurulum önerilir.
 
 ### 2. Adım: Uygulamayı Başlat
-Terminal'de aşağıdaki komutu çalıştırın:
+
+**🚀 En Kolay Yol (Önerilen):**
+```bash
+bash start.sh
+```
+
+**⚡ Hızlı Başlatma Seçenekleri:**
+
+1. **Gunicorn (CPU optimized):**
+```bash
+gunicorn -c gunicorn.conf.py main:app
+```
+
+2. **Python Development:**
 ```bash
 python3 main.py
 ```
 
-Alternatif olarak Gunicorn ile:
+3. **Manuel Gunicorn:**
 ```bash
-gunicorn --bind 0.0.0.0:5000 main:app
+gunicorn --bind 0.0.0.0:5000 --workers 1 --threads 2 main:app
 ```
 
 ### 3. Adım: Uygulama Erişimi
@@ -62,9 +75,58 @@ export APIFOOTBALL_API_KEY="your_api_key_here"
 - `templates/` - HTML şablonları
 - `static/` - CSS, JS ve resim dosyaları
 
-## Sorun Giderme
+## 🔧 CPU Optimizasyonları
 
-Eğer kütüphane import hataları alırsanız:
-1. `pip install -r requirements.txt` komutunu tekrar çalıştırın
-2. Python 3.8+ kullandığınızdan emin olun
-3. CodeSandbox terminal'inde `python3 --version` ile Python versiyonunu kontrol edin
+**CPU %97 Sorunu Çözüldü!** Aşağıdaki optimizasyonlar uygulandı:
+
+### ✅ Yapılan İyileştirmeler:
+- **Lazy Loading**: Servisler ihtiyaç anında yüklenir
+- **Minimal Startup**: Gereksiz işlemler başlangıçta atlanır  
+- **Resource Limits**: CPU ve memory kullanımı sınırlandırıldı
+- **Smart Fallbacks**: ML kütüphaneleri yoksa basit algoritmalar kullanılır
+- **Environment Detection**: CodeSandbox otomatik algılanır
+
+### ⚡ Performans Ayarları:
+```bash
+# CPU kullanımını kontrol et
+top -p $(pgrep -f "python\|gunicorn")
+
+# Memory kullanımını kontrol et  
+free -h
+```
+
+## 🛠️ Veritabanı & Caching
+
+### Built-in Caching:
+- **Flask-Caching**: Otomatik olarak aktif
+- **Prediction Cache**: Tahminler 10 dakika önbelleğe alınır
+- **Route Cache**: API yanıtları önbelleğe alınır
+
+### SQLite Veritabanı:
+```python
+# Otomatik olarak oluşturulur:
+- team_performance.db
+- predictions_cache.json
+```
+
+## 🚨 Sorun Giderme
+
+### CPU Yüksek Kullanım:
+1. `bash start.sh` kullanın (optimize edilmiş)
+2. Gunicorn ile başlatın: `gunicorn -c gunicorn.conf.py main:app`
+3. Debug mode'u kapatın: `python3 main.py` yerine production mode
+
+### Import Hataları:
+1. `pip install -r requirements.txt --no-cache-dir` çalıştırın
+2. Bireysel paket kurulumu: `pip install Flask requests pytz gunicorn`
+3. Python 3.8+ kullandığınızdan emin olun
+
+### Memory Hataları:
+1. `bash start.sh` optimize edilmiş ayarlarla başlatır
+2. Worker sayısını azaltın: `--workers 1`
+3. Cache'i temizleyin: `/api/clear-cache` endpoint'ini çağırın
+
+### Setup Failed (3/3):
+1. `requirements.txt` dosyasının mevcut olduğunu kontrol edin
+2. `bash start.sh` ile otomatik kurulum yapın
+3. Manual kurulum: `pip install Flask==3.0.0 requests==2.31.0`
