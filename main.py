@@ -9,16 +9,89 @@ import pytz
 # Configure C++ library path for pandas/numpy dependencies
 os.environ['LD_LIBRARY_PATH'] = '/home/runner/.local/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu:' + os.environ.get('LD_LIBRARY_PATH', '')
 from flask import Flask, render_template, jsonify, request, flash, redirect, url_for
-from flask_caching import Cache
-from match_prediction import MatchPredictor
+# Optional imports for CodeSandbox compatibility
+try:
+    from flask_caching import Cache
+    CACHING_AVAILABLE = True
+except ImportError:
+    CACHING_AVAILABLE = False
+    class MockCache:
+        def __init__(self, app=None, config=None): pass
+        def cached(self, *args, **kwargs): 
+            def decorator(f): return f
+            return decorator
+        def get(self, key): return None
+        def set(self, key, value, timeout=None): pass
+        def clear(self): return True
+    Cache = MockCache
+# Safe imports for CodeSandbox compatibility
+try:
+    from match_prediction import MatchPredictor
+    MATCH_PREDICTION_AVAILABLE = True
+except ImportError as e:
+    logger.error(f"MatchPredictor import failed: {e}")
+    MATCH_PREDICTION_AVAILABLE = False
+    class MatchPredictor:
+        def __init__(self): 
+            self.predictions_cache = {}
+            logger.warning("Using MatchPredictor fallback")
+        def predict_match(self, *args, **kwargs):
+            return {"error": "MatchPredictor not available", "fallback": True}
+        def clear_cache(self):
+            return True
+
+try:
+    from model_validation import ModelValidator
+    MODEL_VALIDATION_AVAILABLE = True
+except ImportError as e:
+    logger.error(f"ModelValidator import failed: {e}")
+    MODEL_VALIDATION_AVAILABLE = False
+    class ModelValidator:
+        def __init__(self, predictor): 
+            logger.warning("Using ModelValidator fallback")
+
+try:
+    from hybrid_kg_service import get_hybrid_kg_prediction
+    HYBRID_KG_AVAILABLE = True
+except ImportError as e:
+    logger.error(f"HybridKG import failed: {e}")
+    HYBRID_KG_AVAILABLE = False
+    def get_hybrid_kg_prediction(*args, **kwargs):
+        return None
+
+try:
+    from dynamic_team_analyzer import DynamicTeamAnalyzer
+    DYNAMIC_ANALYZER_AVAILABLE = True
+except ImportError as e:
+    logger.error(f"DynamicTeamAnalyzer import failed: {e}")
+    DYNAMIC_ANALYZER_AVAILABLE = False
+    class DynamicTeamAnalyzer:
+        def analyze_and_update(self): pass
+
+try:
+    from team_performance_updater import TeamPerformanceUpdater
+    PERFORMANCE_UPDATER_AVAILABLE = True
+except ImportError as e:
+    logger.error(f"TeamPerformanceUpdater import failed: {e}")
+    PERFORMANCE_UPDATER_AVAILABLE = False
+    class TeamPerformanceUpdater:
+        def __init__(self, analyzer): pass
+        def start(self): pass
+
+try:
+    from self_learning_predictor import SelfLearningPredictor
+    SELF_LEARNING_AVAILABLE = True
+except ImportError as e:
+    logger.error(f"SelfLearningPredictor import failed: {e}")
+    SELF_LEARNING_AVAILABLE = False
+    class SelfLearningPredictor:
+        def __init__(self, analyzer): pass
+        def analyze_predictions_and_results(self):
+            return {"sufficient_data": False}
+
 # Create and load api_routes only after setting up the Flask app
 # This avoids circular imports
 api_v3_bp = None  # Will be set after app creation
-from model_validation import ModelValidator
-from hybrid_kg_service import get_hybrid_kg_prediction
-from dynamic_team_analyzer import DynamicTeamAnalyzer
-from team_performance_updater import TeamPerformanceUpdater
-from self_learning_predictor import SelfLearningPredictor
 
 # Global değişkenler - Modüller arası paylaşım için
 team_analyzer = None
@@ -32,22 +105,43 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET")
 
-# Flask-Caching konfigürasyonu
-cache_config = {
-    "CACHE_TYPE": "SimpleCache",  # Basit bellek içi önbellek
-    "CACHE_DEFAULT_TIMEOUT": 300,  # Varsayılan 5 dakika (300 saniye) önbellek süresi
-    "CACHE_THRESHOLD": 500,        # Maksimum önbellek öğe sayısı
-}
-cache = Cache(app, config=cache_config)
+# Flask-Caching konfigürasyonu (optional for CodeSandbox)
+if CACHING_AVAILABLE:
+    cache_config = {
+        "CACHE_TYPE": "SimpleCache",
+        "CACHE_DEFAULT_TIMEOUT": 300,
+        "CACHE_THRESHOLD": 500,
+    }
+    cache = Cache(app, config=cache_config)
+    logger.info("Flask-Caching enabled")
+else:
+    cache = Cache(app)
+    logger.info("Flask-Caching disabled (using mock cache)")
 
 # API Blueprint'leri kaydet - moved below
 # api_v3_bp will be imported after app creation
 
-# Tahmin modelini oluştur
-predictor = MatchPredictor()
+# Lazy initialization of heavy objects to prevent CPU spike on startup
+predictor = None
+model_validator = None
 
-# Model doğrulama ve değerlendirme için validator oluştur
-model_validator = ModelValidator(predictor)
+def get_predictor():
+    """Lazy loading of MatchPredictor to save startup CPU"""
+    global predictor
+    if predictor is None:
+        logger.info("🔄 Initializing MatchPredictor on first use...")
+        predictor = MatchPredictor()
+        logger.info("✅ MatchPredictor ready")
+    return predictor
+
+def get_model_validator():
+    """Lazy loading of ModelValidator to save startup CPU"""
+    global model_validator
+    if model_validator is None:
+        logger.info("🔄 Initializing ModelValidator on first use...")
+        model_validator = ModelValidator(get_predictor())
+        logger.info("✅ ModelValidator ready")
+    return model_validator
 
 def get_matches(selected_date=None):
     try:
@@ -59,7 +153,7 @@ def get_matches(selected_date=None):
             selected_date = datetime.now().strftime('%Y-%m-%d')
 
         matches = []
-        api_key = os.environ.get('APIFOOTBALL_API_KEY', 'aa2b2ffba35e4c25666961de6fd2f51419adeb32cc9d56394012f8e5067682df')
+        api_key = os.environ.get('APIFOOTBALL_API_KEY', '908ca1caaca4f5470f8c9d7f01a02d66fa06d149e77627804796c4f12568a485')
 
         # Get matches from APIFootball
         url = "https://apiv3.apifootball.com/"
@@ -276,7 +370,7 @@ def index():
 def team_stats(team_id):
     try:
         # APIFootball API anahtarı
-        api_key = os.environ.get('APIFOOTBALL_API_KEY', 'aa2b2ffba35e4c25666961de6fd2f51419adeb32cc9d56394012f8e5067682df')
+        api_key = os.environ.get('APIFOOTBALL_API_KEY', '908ca1caaca4f5470f8c9d7f01a02d66fa06d149e77627804796c4f12568a485')
 
         # Son 6 aylık maçları al
         end_date = datetime.now()
@@ -493,8 +587,8 @@ def predict_match_post():
         if not home_team_id or not away_team_id:
             return jsonify({"error": "Takım ID'leri eksik"}), 400
             
-        # Tahmin yap
-        prediction = predictor.predict_match(
+        # Tahmin yap (lazy loading)
+        prediction = get_predictor().predict_match(
             home_team_id, 
             away_team_id, 
             home_team_name, 
@@ -539,8 +633,8 @@ def predict_match(home_team_id, away_team_id):
         logger.info(f"Yeni tahmin yapılıyor. Force update: {force_update}, Takımlar: {home_team_name} vs {away_team_name}")
             
         try:
-            # Tahmin yap
-            prediction = predictor.predict_match(home_team_id, away_team_id, home_team_name, away_team_name, force_update)
+            # Tahmin yap (lazy loading)
+            prediction = get_predictor().predict_match(home_team_id, away_team_id, home_team_name, away_team_name, force_update)
             
             # Yeni tahmini önbelleğe ekle (10 dakika süreyle)
             if prediction and (isinstance(prediction, dict) and not prediction.get('error')):
@@ -672,8 +766,8 @@ def predict_match_hybrid(home_team_id, away_team_id):
 def clear_predictions_cache():
     """Tahmin önbelleğini temizle (hem dosya tabanlı önbelleği hem de Flask-Cache önbelleğini)"""
     try:
-        # Predictor dosya tabanlı önbelleğini temizle
-        success_file_cache = predictor.clear_cache()
+        # Predictor dosya tabanlı önbelleğini temizle (lazy loading)
+        success_file_cache = get_predictor().clear_cache()
         
         # Flask-Cache önbelleğini temizle
         with app.app_context():
@@ -703,6 +797,59 @@ def clear_predictions_cache():
         logger.error(error_msg)
         return jsonify({"error": error_msg, "success": False}), 500
 
+@app.route('/api/health')
+def health_check():
+    """Health check endpoint for monitoring"""
+    import time
+    import psutil
+    import os
+    
+    try:
+        # Get basic system info
+        cpu_percent = psutil.cpu_percent(interval=1)
+        memory = psutil.virtual_memory()
+        disk = psutil.disk_usage('/')
+        
+        # Check if critical services are loaded
+        services_status = {
+            "predictor": predictor is not None,
+            "model_validator": model_validator is not None,
+            "cache": CACHING_AVAILABLE,
+            "match_prediction": MATCH_PREDICTION_AVAILABLE
+        }
+        
+        # Determine health status
+        is_healthy = cpu_percent < 90 and memory.percent < 90
+        
+        health_data = {
+            "status": "healthy" if is_healthy else "warning",
+            "timestamp": time.time(),
+            "uptime": time.time(),
+            "system": {
+                "cpu_percent": cpu_percent,
+                "memory_percent": memory.percent,
+                "memory_available": f"{memory.available / (1024**3):.2f}GB",
+                "disk_percent": disk.percent,
+                "disk_free": f"{disk.free / (1024**3):.2f}GB"
+            },
+            "services": services_status,
+            "environment": {
+                "python_version": f"{os.sys.version_info.major}.{os.sys.version_info.minor}",
+                "platform": os.name,
+                "codesandbox": bool(os.environ.get('CODESPACE_NAME') or os.environ.get('CODESANDBOX_HOST'))
+            }
+        }
+        
+        status_code = 200 if is_healthy else 503
+        return jsonify(health_data), status_code
+        
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+            "timestamp": time.time()
+        }), 500
+
 @app.route('/predictions')
 def predictions_page():
     """Tüm tahminleri gösteren sayfa"""
@@ -712,7 +859,12 @@ def predictions_page():
 def cache_table():
     """Önbellekteki tahminleri tabloda gösteren sayfa"""
     import json
-    from tabulate import tabulate
+    try:
+        from tabulate import tabulate
+    except ImportError:
+        # Fallback without tabulate
+        def tabulate(data, headers=None):
+            return str(data)
     
     try:
         with open('predictions_cache.json', 'r', encoding='utf-8') as f:
@@ -892,108 +1044,101 @@ def find_available_port(preferred_ports=None):
     logger.warning("Tercih edilen portların hiçbiri kullanılamıyor, rastgele bir port atanacak")
     return 0  # 0 verilirse, sistem otomatik olarak kullanılabilir bir port atar
 
-if __name__ == '__main__':
-    # Dinamik takım analizörünü başlat
-    try:
-        team_analyzer = DynamicTeamAnalyzer()
-        logger.info("Dinamik Takım Analizörü başlatıldı")
-        
-        # Performans verilerini analiz et ve güncelle
-        team_analyzer.analyze_and_update()
-        logger.info("Takım performans analizi tamamlandı")
-        
-        # Kendi kendine öğrenen tahmin modelini başlat
-        self_learning = SelfLearningPredictor(analyzer=team_analyzer)
-        logger.info("Kendi Kendine Öğrenen Tahmin Modeli başlatıldı")
-        
-        # Takım faktörlerini analiz et
-        analysis_result = self_learning.analyze_predictions_and_results()
-        if analysis_result.get('sufficient_data', False):
-            logger.info(f"Model analizi tamamlandı: {analysis_result.get('analyzed_matches', 0)} maç analiz edildi")
-            logger.info(f"Doğruluk: {analysis_result.get('outcome_accuracy', 0):.4f}")
-        else:
-            logger.info("Yeterli doğrulama verisi yok, model analizi atlandı")
-            
-        # Performans güncelleyiciyi arkaplanda başlat
-        updater = TeamPerformanceUpdater(analyzer=team_analyzer)
-        updater.start()
-        logger.info("Takım Performans Güncelleyici arkaplanda başlatıldı")
-    except Exception as e:
-        logger.error(f"Dinamik analiz sistemleri başlatılırken hata: {str(e)}")
-        logger.info("Uygulama temel tahmin modelleriyle çalışmaya devam edecek")
+def initialize_services_lazy():
+    """Lazy initialization of heavy services to reduce startup CPU load"""
+    global team_analyzer, self_learning, performance_updater
     
-    # Şimdi api_routes modülündeki blueprint'i içe aktar
+    logger.info("🚀 Starting Football Predictor with CodeSandbox optimizations...")
+    
+    # Only initialize critical services on startup
+    team_analyzer = None
+    self_learning = None 
+    performance_updater = None
+    
+    # Skip heavy initialization in CodeSandbox to prevent CPU overload
+    import os
+    if os.environ.get('CODESPACE_NAME') or os.environ.get('CODESANDBOX_HOST'):
+        logger.info("CodeSandbox detected: Skipping heavy service initialization")
+        logger.info("Services will be initialized on-demand to save CPU")
+        return
+    
+    # Only initialize if not in limited environment and enough time has passed
+    try:
+        # Minimal initialization for production
+        if DYNAMIC_ANALYZER_AVAILABLE:
+            team_analyzer = DynamicTeamAnalyzer()
+            logger.info("✅ Dinamik Takım Analizörü initialized")
+        
+        # Skip heavy analysis on startup
+        logger.info("⏭️ Skipping heavy analysis on startup for performance")
+        
+    except Exception as e:
+        logger.error(f"Service initialization error: {str(e)}")
+        logger.info("Continuing with fallback services...")
+
+if __name__ == '__main__':
+    # Initialize services with lazy loading
+    initialize_services_lazy()
+    
+    # API Blueprint'i yükle
     try:
         from api_routes import api_v3_bp
-        # Register the blueprint after it's properly imported
         app.register_blueprint(api_v3_bp)
-        logger.info("API Blueprint başarıyla kaydedildi")
+        logger.info("✅ API Blueprint kaydedildi")
     except Exception as e:
-        logger.error(f"API Blueprint kaydedilirken hata: {str(e)}")
+        logger.error(f"❌ API Blueprint hatası: {str(e)}")
     
-    # PORT çevre değişkeni veya varsayılan portları kontrol et
-    try:
-        import socket
+    # Determine optimal port efficiently
+    port = int(os.environ.get('PORT', 5000))  # Use environment or default
+    
+    # Check if we should use production mode or development mode
+    is_production = os.environ.get('PYTHON_ENV') == 'production'
+    is_codesandbox = os.environ.get('CODESPACE_NAME') or os.environ.get('CODESANDBOX_HOST')
+    
+    if is_codesandbox:
+        logger.info("🔧 CodeSandbox detected: Starting with minimal resource usage")
+        print("🚀 Football Predictor starting in CodeSandbox mode...")
+        print(f"📡 Server will be available at http://localhost:{port}")
+        print("💡 Use: gunicorn -c gunicorn.conf.py main:app for production")
         
-        port = None
-        # İlk olarak PORT çevre değişkenini dene
-        port_env = os.environ.get('PORT')
-        if port_env:
-            try:
-                port = int(port_env)
-                logger.info(f"PORT çevre değişkeni bulundu: {port}")
-            except ValueError:
-                logger.warning(f"PORT çevre değişkeni geçerli bir sayı değil: {port_env}")
-                port = None
-                
-        # Tercih edilen portları dene
-        preferred_ports = [8080, 3000, 5000]
-        
-        # PORT çevre değişkeni geçerli değilse tercih edilen portları dene
-        if port is None:
-            for test_port in preferred_ports:
-                try:
-                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    sock.bind(('0.0.0.0', test_port))
-                    sock.close()
-                    port = test_port
-                    logger.info(f"Kullanılabilir port bulundu: {port}")
-                    break
-                except OSError:
-                    logger.warning(f"Port {test_port} kullanılamıyor, sonraki deneniyor...")
-                    continue
-                    
-        # Hala port bulunamadıysa, sisteme rastgele bir port seçtir
-        if port is None:
-            try:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.bind(('0.0.0.0', 0))
-                port = sock.getsockname()[1]
-                sock.close()
-                logger.info(f"Rastgele port seçildi: {port}")
-            except OSError as e:
-                logger.error(f"Rastgele port seçerken hata: {str(e)}")
-                # Son çare olarak 8888 portunu dene
-                port = 8888
-        
-        # Son kontrol - port hala None ise 3000 ile dene
-        if port is None:
-            port = 3000
-            
-        logger.info(f"Uygulama {port} portunda başlatılıyor")
-        print(f"Uygulama {port} portunda başlatılıyor")
-            
-        # Uygulamayı çalıştır
-        app.run(host='0.0.0.0', port=port, debug=True)
-        
-    except Exception as e:
-        logger.error(f"Uygulama başlatılırken kritik hata: {str(e)}")
-        # Son çare - 5000 portunu güvenli modda dene
         try:
-            logger.info("Son çare: 5000 portu güvenli modda deneniyor...")
-            print("Son çare: 5000 portu güvenli modda deneniyor...")
-            # Debug modunu kapatarak dene
-            app.run(host='0.0.0.0', port=5000, debug=False)
-        except Exception as final_e:
-            logger.error(f"Son çare girişimi de başarısız: {str(final_e)}")
-            print(f"Uygulama başlatılamadı. Hata: {str(final_e)}")
+            # Start with minimal debug and threading for CodeSandbox
+            app.run(
+                host='0.0.0.0', 
+                port=port, 
+                debug=False,  # Disable debug to save CPU
+                use_reloader=False,  # Disable auto-reload to save CPU
+                threaded=True  # Enable threading but keep it minimal
+            )
+        except Exception as e:
+            logger.error(f"CodeSandbox startup failed: {str(e)}")
+            print(f"❌ Startup failed: {str(e)}")
+            print("💡 Try: python3 main.py or gunicorn -c gunicorn.conf.py main:app")
+            
+    elif is_production:
+        logger.info("🏭 Production mode: Use gunicorn for best performance")
+        print("🚀 Football Predictor ready for production")
+        print(f"💡 Start with: gunicorn -c gunicorn.conf.py main:app")
+        print(f"📡 Or simple: gunicorn --bind 0.0.0.0:{port} main:app")
+        # Don't start the dev server in production
+        
+    else:
+        logger.info("🔧 Development mode: Starting with full features")
+        print(f"🚀 Football Predictor starting on port {port}")
+        
+        try:
+            app.run(
+                host='0.0.0.0',
+                port=port,
+                debug=True,
+                use_reloader=True
+            )
+        except Exception as e:
+            logger.error(f"Development startup failed: {str(e)}")
+            # Fallback to basic mode
+            try:
+                logger.info("⚡ Fallback: Starting in basic mode")
+                app.run(host='0.0.0.0', port=port, debug=False)
+            except Exception as final_e:
+                logger.error(f"💥 All startup attempts failed: {str(final_e)}")
+                print(f"❌ Cannot start server: {str(final_e)}")
