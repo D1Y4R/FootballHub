@@ -2277,11 +2277,14 @@ class MatchPredictor:
             use_bayesian_models = True
         
         # 2. Ensemble Score predictor (mevcut tahmin modelimiz)
+        # TEMPORARILY DISABLED - module not found error
         try:
-            from zip_and_ensemble_predictor import AdvancedScorePredictor
-            advanced_predictor = AdvancedScorePredictor()
-            use_ensemble_models = True
-            logger.info("Gelişmiş ensemble tahmin modeli başarıyla yüklendi")
+            # from zip_and_ensemble_predictor import AdvancedScorePredictor
+            # advanced_predictor = AdvancedScorePredictor()
+            # use_ensemble_models = True
+            # logger.info("Gelişmiş ensemble tahmin modeli başarıyla yüklendi")
+            use_ensemble_models = False
+            logger.info("Gelişmiş ensemble tahmin modeli devre dışı bırakıldı - modül bulunamadı")
         except Exception as e:
             logger.warning(f"Ensemble tahmin modeli yüklenemedi: {e}")
             use_ensemble_models = False
@@ -2342,7 +2345,7 @@ class MatchPredictor:
 
         # Gelişmiş tahmin modellerini kullan - YENİ: iyileştirilmiş tutarlılık için daha fazla ağırlık ver
         advanced_prediction = None
-        if use_ensemble_models:
+        if use_ensemble_models and 'advanced_predictor' in locals():
             try:
                 # Geliştirilmiş algoritma - daha tutarlı tahminler için
                 advanced_prediction = advanced_predictor.predict_match(
@@ -2367,6 +2370,8 @@ class MatchPredictor:
             except Exception as e:
                 logger.error(f"Gelişmiş tahmin modelleri hatası: {e}")
                 advanced_prediction = None
+        elif use_ensemble_models:
+            logger.warning("Ensemble modeller aktif ama advanced_predictor değişkeni tanımlı değil - atlandı")
 
         # Sinir ağı için veri hazırla
         home_features = self.prepare_data_for_neural_network(home_form, is_home=True)

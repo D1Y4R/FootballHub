@@ -6,6 +6,8 @@ On-demand model loading to reduce memory usage and startup time
 import os
 import threading
 import logging
+import psutil
+import time
 from typing import Dict, Any, Optional, Callable
 from functools import wraps
 
@@ -89,6 +91,51 @@ class LazyModelManager:
         """Get loading status of a model"""
         return self.loading_status.get(name, "not_registered")
     
+    def get_loading_status(self) -> Dict[str, str]:
+        """Get loading status of all models"""
+        status = dict(self.loading_status)
+        status['preload_thread_active'] = False  # Simplified for now
+        return status
+    
+    def get_memory_usage(self) -> Dict[str, Any]:
+        """Get memory usage information"""
+        try:
+            process = psutil.Process()
+            memory_info = process.memory_info()
+            
+            return {
+                'total_memory_mb': memory_info.rss / 1024 / 1024,
+                'loaded_models': len(self.models),
+                'registered_models': len(self.loaders),
+                'failed_models': len([s for s in self.loading_status.values() if s.startswith('error')]),
+                'cpu_percent': psutil.cpu_percent(),
+                'memory_percent': psutil.virtual_memory().percent
+            }
+        except Exception as e:
+            logger.error(f"Error getting memory usage: {e}")
+            return {
+                'total_memory_mb': 0,
+                'loaded_models': len(self.models),
+                'registered_models': len(self.loaders),
+                'failed_models': 0,
+                'error': str(e)
+            }
+    
+    def force_load_all(self) -> float:
+        """Force load all registered models and return time taken"""
+        start_time = time.time()
+        
+        with self.lock:
+            for name in self.loaders.keys():
+                if name not in self.models:
+                    logger.info(f"Force loading model: {name}")
+                    self._load_model(name)
+        
+        end_time = time.time()
+        load_time = end_time - start_time
+        logger.info(f"Force loaded all models in {load_time:.2f} seconds")
+        return load_time
+    
     def unload_model(self, name: str) -> bool:
         """Unload a model to free memory"""
         with self.lock:
@@ -121,6 +168,15 @@ class LazyModelManager:
                 logger.error(f"Failed to preload {name}: {str(e)}")
                 results[name] = False
         return results
+    
+    def preload_critical_models(self):
+        """Preload critical models if not in resource-constrained environment"""
+        if not is_resource_constrained():
+            logger.info("Preloading critical models...")
+            results = self.preload_models(["match_predictor", "model_validator"])
+            logger.info(f"Preload results: {results}")
+        else:
+            logger.info("Resource-constrained environment detected, skipping preload")
     
     def cleanup(self):
         """Clean up all loaded models"""

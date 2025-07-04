@@ -146,11 +146,11 @@ setup_performance_monitoring(app)
 # Legacy functions for backward compatibility
 def get_predictor():
     """Legacy function - now uses LazyModelManager"""
-    return model_manager.get_predictor()
+    return model_manager.get_model('match_predictor')
 
 def get_model_validator():
     """Legacy function - now uses LazyModelManager"""
-    return model_manager.get_validator()
+    return model_manager.get_model('model_validator')
 
 @performance_monitor("get_matches")
 def get_matches(selected_date=None):
@@ -830,9 +830,9 @@ def health_check():
         
         # Check optimized services status
         services_status = {
-            "predictor": model_manager.is_loaded('predictor'),
-            "validator": model_manager.is_loaded('validator'),
-            "advanced_models": model_manager.is_loaded('advanced'),
+                    "predictor": model_manager.is_loaded('match_predictor'),
+        "validator": model_manager.is_loaded('model_validator'),
+        "advanced_models": model_manager.is_loaded('kg_service'),
             "cache": CACHING_AVAILABLE,
             "match_prediction": MATCH_PREDICTION_AVAILABLE
         }
@@ -1179,9 +1179,9 @@ def models_status():
             'loading_status': model_manager.get_loading_status(),
             'memory_usage': model_manager.get_memory_usage(),
             'available_components': {
-                'predictor': model_manager.is_loaded('predictor'),
-                'validator': model_manager.is_loaded('validator'),
-                'advanced_models': model_manager.is_loaded('advanced')
+                'predictor': model_manager.is_loaded('match_predictor'),
+                'validator': model_manager.is_loaded('model_validator'),
+                'advanced_models': model_manager.is_loaded('kg_service')
             },
             'preload_thread_active': model_manager.get_loading_status()['preload_thread_active'],
             'startup_time': time.time() - startup_time
@@ -1205,9 +1205,9 @@ def force_load_models():
             'message': 'All models force-loaded successfully',
             'load_time_seconds': load_time,
             'models_loaded': {
-                'predictor': model_manager.is_loaded('predictor'),
-                'validator': model_manager.is_loaded('validator'),
-                'advanced_models': model_manager.is_loaded('advanced')
+                'predictor': model_manager.is_loaded('match_predictor'),
+                'validator': model_manager.is_loaded('model_validator'),
+                'advanced_models': model_manager.is_loaded('kg_service')
             },
             'timestamp': time.time()
         })
