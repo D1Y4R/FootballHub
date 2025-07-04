@@ -1,0 +1,26 @@
+{
+  // These tasks will run in order when initializing your CodeSandbox project.
+  "setupTasks": [
+    {
+      "command": "pip install -r requirements-full.txt ",
+      "name": "pip install -r requirements.txt "
+    },
+    {
+      "command": "bash start.sh ",
+      "name": "bash start.sh "
+    },
+    {
+      "command": "gunicorn -c gunicorn.conf.py main:app ",
+      "name": "gunicorn -c gunicorn.conf.py main:app "
+    }
+  ],
+
+  // These tasks can be run from CodeSandbox. Running one will open a log in the app.
+  "tasks": {
+    "python3 main.py ": {
+      "name": "python3 main.py ",
+      "command": "python3 main.py ",
+      "runAtStart": true
+    }
+  }
+}
