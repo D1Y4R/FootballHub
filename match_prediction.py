@@ -1,4 +1,4 @@
-import logging
+THIS SHOULD BE A LINTER ERRORimport logging
 import json
 import os
 import math
@@ -3632,7 +3632,7 @@ class MatchPredictor:
                     if expected_home_goals > expected_away_goals + 0.3:
                         # Ev sahibi takımın gol beklentisi daha yüksek, 0'lı skorlarda ev sahibini seç
                         home_win_kg_yok = [(score, count) for score, count in kg_yok_scores 
-                                         if int(score.split('-')[0]) > 0 and int(score.split('-')[1]) == 0]
+                                         if int(float(score.split('-')[0])) > 0 and int(float(score.split('-')[1])) == 0]
                         if home_win_kg_yok:
                             most_likely_score = max(home_win_kg_yok, key=lambda x: x[1])
                             logger.info(f"KG YOK + Ev sahibi üstünlüğü nedeniyle kesin skor {most_likely_score[0]} olarak güncellendi")
@@ -3642,7 +3642,7 @@ class MatchPredictor:
                     elif expected_away_goals > expected_home_goals + 0.3:
                         # Deplasman takımının gol beklentisi daha yüksek, 0'lı skorlarda deplasmanı seç
                         away_win_kg_yok = [(score, count) for score, count in kg_yok_scores 
-                                         if int(score.split('-')[0]) == 0 and int(score.split('-')[1]) > 0]
+                                         if int(float(score.split('-')[0])) == 0 and int(float(score.split('-')[1])) > 0]
                         if away_win_kg_yok:
                             most_likely_score = max(away_win_kg_yok, key=lambda x: x[1])
                             logger.info(f"KG YOK + Deplasman üstünlüğü nedeniyle kesin skor {most_likely_score[0]} olarak güncellendi")
