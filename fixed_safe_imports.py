@@ -156,6 +156,12 @@ def create_numpy_fallback():
                 return [math.log(max(1e-10, val)) for val in x]
             return math.log(max(1e-10, x))
         
+        def sqrt(self, x):
+            import math
+            if isinstance(x, list):
+                return [math.sqrt(max(0, val)) for val in x]
+            return math.sqrt(max(0, x))
+        
         class RandomModule:
             def poisson(self, lam, size=None):
                 import random
@@ -174,6 +180,31 @@ def create_numpy_fallback():
                 if size is None:
                     return random.choice(choices)
                 return [random.choice(choices) for _ in range(size)]
+            
+            def random(self, size=None):
+                import random
+                if size is None:
+                    return random.random()
+                if isinstance(size, int):
+                    return [random.random() for _ in range(size)]
+                # If size is a tuple/list, return multi-dimensional array
+                return [random.random() for _ in range(size[0] if hasattr(size, '__getitem__') else size)]
+            
+            def negative_binomial(self, n, p, size=None):
+                import random
+                # Simple approximation using gamma-poisson mixture
+                # This is a very basic approximation
+                if size is None:
+                    # Use geometric distribution as approximation
+                    count = 0
+                    successes = 0
+                    while successes < n:
+                        if random.random() < p:
+                            successes += 1
+                        count += 1
+                    return max(0, count - n)
+                else:
+                    return [self.negative_binomial(n, p) for _ in range(size)]
     
     return NumpyFallback()
 

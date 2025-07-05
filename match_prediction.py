@@ -3,7 +3,15 @@ import json
 import os
 import math
 from datetime import datetime, timedelta
-import requests
+
+# Optional import for requests
+try:
+    import requests
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
+    requests = None
+
 from fixed_safe_imports import safe_import_numpy, safe_import_pandas, safe_import_sklearn, safe_import_tensorflow
 
 # Safe imports for problematic dependencies
@@ -1767,6 +1775,10 @@ class MatchPredictor:
                 'APIkey': self.api_key
             }
 
+            if not REQUESTS_AVAILABLE:
+                logger.warning("requests module not available, returning fallback form data")
+                return self._generate_fallback_form_data(team_id)
+
             response = requests.get(url, params=params)
 
             if response.status_code != 200:
@@ -2277,11 +2289,14 @@ class MatchPredictor:
             use_bayesian_models = True
         
         # 2. Ensemble Score predictor (mevcut tahmin modelimiz)
+        # TEMPORARILY DISABLED - module not found error
         try:
-            from zip_and_ensemble_predictor import AdvancedScorePredictor
-            advanced_predictor = AdvancedScorePredictor()
-            use_ensemble_models = True
-            logger.info("Gelişmiş ensemble tahmin modeli başarıyla yüklendi")
+            # from zip_and_ensemble_predictor import AdvancedScorePredictor
+            # advanced_predictor = AdvancedScorePredictor()
+            # use_ensemble_models = True
+            # logger.info("Gelişmiş ensemble tahmin modeli başarıyla yüklendi")
+            use_ensemble_models = False
+            logger.info("Gelişmiş ensemble tahmin modeli devre dışı bırakıldı - modül bulunamadı")
         except Exception as e:
             logger.warning(f"Ensemble tahmin modeli yüklenemedi: {e}")
             use_ensemble_models = False
@@ -2342,7 +2357,7 @@ class MatchPredictor:
 
         # Gelişmiş tahmin modellerini kullan - YENİ: iyileştirilmiş tutarlılık için daha fazla ağırlık ver
         advanced_prediction = None
-        if use_ensemble_models:
+        if use_ensemble_models and 'advanced_predictor' in locals():
             try:
                 # Geliştirilmiş algoritma - daha tutarlı tahminler için
                 advanced_prediction = advanced_predictor.predict_match(
@@ -2367,6 +2382,8 @@ class MatchPredictor:
             except Exception as e:
                 logger.error(f"Gelişmiş tahmin modelleri hatası: {e}")
                 advanced_prediction = None
+        elif use_ensemble_models:
+            logger.warning("Ensemble modeller aktif ama advanced_predictor değişkeni tanımlı değil - atlandı")
 
         # Sinir ağı için veri hazırla
         home_features = self.prepare_data_for_neural_network(home_form, is_home=True)
@@ -3565,8 +3582,8 @@ class MatchPredictor:
             logger.warning(f"=== RANA FK ANALİZ SONU ===")
         
         # Skorlar içinde en çok KG VAR ve KG YOK olan skorları bul
-        kg_var_scores = [(score, count) for score, count in exact_scores.items() if int(score.split('-')[0]) > 0 and int(score.split('-')[1]) > 0]
-        kg_yok_scores = [(score, count) for score, count in exact_scores.items() if int(score.split('-')[0]) == 0 or int(score.split('-')[1]) == 0]
+        kg_var_scores = [(score, count) for score, count in exact_scores.items() if int(float(score.split('-')[0])) > 0 and int(float(score.split('-')[1])) > 0]
+        kg_yok_scores = [(score, count) for score, count in exact_scores.items() if int(float(score.split('-')[0])) == 0 or int(float(score.split('-')[1])) == 0]
         
         # KG VAR/YOK skorlarının toplam olasılıkları
         kg_var_total_prob = sum(count for _, count in kg_var_scores) / simulations if kg_var_scores else 0
@@ -3615,7 +3632,7 @@ class MatchPredictor:
                     if expected_home_goals > expected_away_goals + 0.3:
                         # Ev sahibi takımın gol beklentisi daha yüksek, 0'lı skorlarda ev sahibini seç
                         home_win_kg_yok = [(score, count) for score, count in kg_yok_scores 
-                                         if int(score.split('-')[0]) > 0 and int(score.split('-')[1]) == 0]
+                                         if int(float(score.split('-')[0])) > 0 and int(float(score.split('-')[1])) == 0]
                         if home_win_kg_yok:
                             most_likely_score = max(home_win_kg_yok, key=lambda x: x[1])
                             logger.info(f"KG YOK + Ev sahibi üstünlüğü nedeniyle kesin skor {most_likely_score[0]} olarak güncellendi")
@@ -3625,7 +3642,7 @@ class MatchPredictor:
                     elif expected_away_goals > expected_home_goals + 0.3:
                         # Deplasman takımının gol beklentisi daha yüksek, 0'lı skorlarda deplasmanı seç
                         away_win_kg_yok = [(score, count) for score, count in kg_yok_scores 
-                                         if int(score.split('-')[0]) == 0 and int(score.split('-')[1]) > 0]
+                                         if int(float(score.split('-')[0])) == 0 and int(float(score.split('-')[1])) > 0]
                         if away_win_kg_yok:
                             most_likely_score = max(away_win_kg_yok, key=lambda x: x[1])
                             logger.info(f"KG YOK + Deplasman üstünlüğü nedeniyle kesin skor {most_likely_score[0]} olarak güncellendi")
@@ -3648,7 +3665,7 @@ class MatchPredictor:
                 elif expected_away_goals > expected_home_goals + 0.3:
                     # Deplasman takımının gol beklentisi daha yüksek, 0'lı skorlarda deplasmanı seç
                     away_win_kg_yok = [(score, count) for score, count in kg_yok_scores 
-                                     if int(score.split('-')[0]) == 0 and int(score.split('-')[1]) > 0]
+                                     if int(float(score.split('-')[0])) == 0 and int(float(score.split('-')[1])) > 0]
                     if away_win_kg_yok:
                         most_likely_score = max(away_win_kg_yok, key=lambda x: x[1])
                         logger.info(f"KG YOK + Deplasman üstünlüğü nedeniyle kesin skor {most_likely_score[0]} olarak güncellendi")

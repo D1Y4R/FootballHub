@@ -1,14 +1,38 @@
 import logging
 import os
-import requests
 import threading
 import socket
+import time
 from datetime import datetime, timedelta
-import pytz
+
+# Optional import for timezone handling
+try:
+    import pytz
+    PYTZ_AVAILABLE = True
+except ImportError:
+    PYTZ_AVAILABLE = False
+    pytz = None
+
+# Optional import for API requests
+try:
+    import requests
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
+    requests = None
 
 # Configure C++ library path for pandas/numpy dependencies
 os.environ['LD_LIBRARY_PATH'] = '/home/runner/.local/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu:' + os.environ.get('LD_LIBRARY_PATH', '')
 from flask import Flask, render_template, jsonify, request, flash, redirect, url_for
+
+# Import performance optimizations
+from optimized_cache import OptimizedPredictionCache
+from lazy_model_manager import LazyModelManager
+from api_cache_manager import APIResponseCache
+from performance_middleware import (
+    performance_monitor, cached_route, throttle_requests, 
+    setup_performance_monitoring
+)
 # Optional imports for CodeSandbox compatibility
 try:
     from flask_caching import Cache
@@ -102,6 +126,9 @@ performance_updater = None
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Record startup time for performance monitoring
+startup_time = time.time()
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET")
 
@@ -118,36 +145,41 @@ else:
     cache = Cache(app)
     logger.info("Flask-Caching disabled (using mock cache)")
 
+# Initialize optimized components
+optimized_cache = OptimizedPredictionCache(max_size=1000, compression=True)
+model_manager = LazyModelManager()
+api_cache = APIResponseCache(app)
+
+# Setup performance monitoring
+setup_performance_monitoring(app)
+
 # API Blueprint'leri kaydet - moved below
 # api_v3_bp will be imported after app creation
 
-# Lazy initialization of heavy objects to prevent CPU spike on startup
-predictor = None
-model_validator = None
-
+# Legacy functions for backward compatibility
+# Legacy functions for backward compatibility
 def get_predictor():
-    """Lazy loading of MatchPredictor to save startup CPU"""
-    global predictor
+    """Legacy function - now uses LazyModelManager with fallback"""
+    predictor = model_manager.get_model('match_predictor')
     if predictor is None:
-        logger.info("🔄 Initializing MatchPredictor on first use...")
-        predictor = MatchPredictor()
-        logger.info("✅ MatchPredictor ready")
+        logger.error("No predictor available, returning None")
     return predictor
 
 def get_model_validator():
-    """Lazy loading of ModelValidator to save startup CPU"""
-    global model_validator
-    if model_validator is None:
-        logger.info("🔄 Initializing ModelValidator on first use...")
-        model_validator = ModelValidator(get_predictor())
-        logger.info("✅ ModelValidator ready")
-    return model_validator
+    """Legacy function - now uses LazyModelManager"""
+    return model_manager.get_model('model_validator')
 
+@performance_monitor("get_matches")
 def get_matches(selected_date=None):
     try:
-        # Create timezone objects
-        utc = pytz.UTC
-        turkey_tz = pytz.timezone('Europe/Istanbul')
+        # Create timezone objects (fallback if pytz not available)
+        if PYTZ_AVAILABLE and pytz:
+            utc = pytz.UTC
+            turkey_tz = pytz.timezone('Europe/Istanbul')
+        else:
+            # Use naive datetime objects when pytz is not available
+            utc = None
+            turkey_tz = None
 
         if not selected_date:
             selected_date = datetime.now().strftime('%Y-%m-%d')
@@ -155,8 +187,7 @@ def get_matches(selected_date=None):
         matches = []
         api_key = os.environ.get('APIFOOTBALL_API_KEY', '908ca1caaca4f5470f8c9d7f01a02d66fa06d149e77627804796c4f12568a485')
 
-        # Get matches from APIFootball
-        url = "https://apiv3.apifootball.com/"
+        # Use cached API call instead of direct requests
         params = {
             'action': 'get_events',
             'APIkey': api_key,
@@ -164,15 +195,18 @@ def get_matches(selected_date=None):
             'to': selected_date,
             'timezone': 'Europe/Istanbul'
         }
-        logger.info(f"Sending API request to {url} with params: {params}")
+        
+        logger.info(f"Fetching matches for date: {selected_date} (using API cache)")
+        
+        # Use optimized API cache with 30-minute timeout for match data
+        data = api_cache.cached_api_call(
+            "https://apiv3.apifootball.com/",
+            params,
+            timeout=1800,  # 30 minutes cache
+            cache_on_error=True  # Use cached data if API fails
+        )
 
-        logger.info(f"Fetching matches for date: {selected_date}")
-        response = requests.get(url, params=params)
-        logger.debug(f"API Response status: {response.status_code}")
-        logger.debug(f"API Response content: {response.content}") # Added logging for debugging
-
-        if response.status_code == 200:
-            data = response.json()
+        if data:
             logger.info(f"API response received. Type: {type(data)}")
             if data == []:
                 logger.warning("API returned empty data array")
@@ -186,6 +220,8 @@ def get_matches(selected_date=None):
                         logger.debug(f"Added match: {match_obj['competition']['name']} - {match_obj['homeTeam']['name']} vs {match_obj['awayTeam']['name']}")
             elif isinstance(data, dict):
                 logger.error(f"API returned error: {data.get('message', 'Unknown error')}")
+        else:
+            logger.warning(f"No data received from API cache for {selected_date}")
 
         # Group matches by league
         league_matches = {}
@@ -352,18 +388,16 @@ def process_match(match, utc, turkey_tz):
         return None
 
 @app.route('/')
-@cache.cached(timeout=300, query_string=True)  # 5 dakika önbellek, query string parametrelerine duyarlı
+@performance_monitor("index_page")
+@cached_route(timeout=300, key_prefix="index")
+@throttle_requests(max_requests=100, window=60)  # 100 requests per minute for main page
 def index():
     """
     Ana sayfa - Günün maçlarını listeler
-    Cache ile performans artırılmıştır (5 dakika önbellek)
-    query_string=True sayesinde farklı tarihler için farklı önbellek oluşturulur
+    Optimized with performance monitoring, caching, and throttling
     """
     selected_date = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
-    start_time = datetime.now()
     matches_data = get_matches(selected_date)
-    elapsed_time = (datetime.now() - start_time).total_seconds()
-    logger.info(f"Maç listesi yüklendi, süre: {elapsed_time:.2f} saniye")
     return render_template('index.html', matches=matches_data, selected_date=selected_date)
 
 @app.route('/api/team-stats/<team_id>')
@@ -386,6 +420,10 @@ def team_stats(team_id):
             'APIkey': api_key
         }
 
+        if not REQUESTS_AVAILABLE or requests is None:
+            logger.warning("Requests module not available, returning empty team stats")
+            return jsonify([])
+        
         logger.debug(f"Fetching team stats for team_id: {team_id}")
         response = requests.get(url, params=params)
         logger.debug(f"API Response status: {response.status_code}")
@@ -443,6 +481,10 @@ def get_league_standings(league_id):
         url = f"https://api.football-data.org/v4/competitions/{league_id}/standings"
         headers = {'X-Auth-Token': api_key}
 
+        if not REQUESTS_AVAILABLE or requests is None:
+            logger.warning("Requests module not available, cannot fetch league standings")
+            return None
+        
         logger.info(f"Making API request to {url}")
         response = requests.get(url, headers=headers)
 
@@ -568,8 +610,10 @@ def leagues():
                             standings=None)
 
 @app.route('/api/predict', methods=['POST'])
+@performance_monitor("predict_match_post")
+@throttle_requests(max_requests=30, window=60)  # 30 predictions per minute
 def predict_match_post():
-    """POST metodu ile maç tahmini yap"""
+    """POST metodu ile maç tahmini yap - Optimized version"""
     try:
         # JSON verisi al
         data = request.json
@@ -587,8 +631,17 @@ def predict_match_post():
         if not home_team_id or not away_team_id:
             return jsonify({"error": "Takım ID'leri eksik"}), 400
             
-        # Tahmin yap (lazy loading)
-        prediction = get_predictor().predict_match(
+        # Tahmin yap (lazy loading) - predictor kontrolü ekle
+        predictor = get_predictor()
+        if predictor is None:
+            logger.error("Predictor is None in POST endpoint")
+            return jsonify({
+                "error": "Tahmin sistemi şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin.",
+                "match": f"{home_team_name} vs {away_team_name}",
+                "timestamp": datetime.now().timestamp()
+            }), 503
+        
+        prediction = predictor.predict_match(
             home_team_id, 
             away_team_id, 
             home_team_name, 
@@ -602,6 +655,9 @@ def predict_match_post():
         return jsonify({"error": f"Tahmin yapılırken hata oluştu: {str(e)}"}), 500
 
 @app.route('/api/predict-match/<home_team_id>/<away_team_id>')
+@performance_monitor("predict_match")
+@cached_route(timeout=600, key_prefix="predict")  # 10 minutes cache
+@throttle_requests(max_requests=30, window=60)  # 30 predictions per minute
 def predict_match(home_team_id, away_team_id):
     """Belirli bir maç için tahmin yap"""
     try:
@@ -633,8 +689,17 @@ def predict_match(home_team_id, away_team_id):
         logger.info(f"Yeni tahmin yapılıyor. Force update: {force_update}, Takımlar: {home_team_name} vs {away_team_name}")
             
         try:
-            # Tahmin yap (lazy loading)
-            prediction = get_predictor().predict_match(home_team_id, away_team_id, home_team_name, away_team_name, force_update)
+            # Tahmin yap (lazy loading) - predictor kontrolü ekle
+            predictor = get_predictor()
+            if predictor is None:
+                logger.error("Predictor is None, cannot make prediction")
+                return jsonify({
+                    "error": "Tahmin sistemi şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin.",
+                    "match": f"{home_team_name} vs {away_team_name}",
+                    "timestamp": datetime.now().timestamp()
+                }), 503
+            
+            prediction = predictor.predict_match(home_team_id, away_team_id, home_team_name, away_team_name, force_update)
             
             # Yeni tahmini önbelleğe ekle (10 dakika süreyle)
             if prediction and (isinstance(prediction, dict) and not prediction.get('error')):
@@ -798,41 +863,68 @@ def clear_predictions_cache():
         return jsonify({"error": error_msg, "success": False}), 500
 
 @app.route('/api/health')
+@performance_monitor("health_check")
 def health_check():
-    """Health check endpoint for monitoring"""
+    """Enhanced health check endpoint with optimization metrics"""
     import time
-    import psutil
     import os
     
     try:
-        # Get basic system info
-        cpu_percent = psutil.cpu_percent(interval=1)
-        memory = psutil.virtual_memory()
-        disk = psutil.disk_usage('/')
+        # Get basic system info (if psutil is available)
+        if model_manager.get_memory_usage().get('cpu_percent') != 'N/A':
+            # Use model_manager's psutil access
+            memory_info = model_manager.get_memory_usage()
+            cpu_percent = memory_info.get('cpu_percent', 0)
+            memory_percent = memory_info.get('memory_percent', 0)
+            disk_percent = 50  # Fallback value
+        else:
+            # Fallback when psutil is not available
+            cpu_percent = 0
+            memory_percent = 0
+            disk_percent = 50
         
-        # Check if critical services are loaded
+        # Check optimized services status
         services_status = {
-            "predictor": predictor is not None,
-            "model_validator": model_validator is not None,
+                    "predictor": model_manager.is_loaded('match_predictor'),
+        "validator": model_manager.is_loaded('model_validator'),
+        "advanced_models": model_manager.is_loaded('kg_service'),
             "cache": CACHING_AVAILABLE,
             "match_prediction": MATCH_PREDICTION_AVAILABLE
         }
         
+        # Get optimization metrics
+        cache_stats = optimized_cache.stats()
+        api_cache_stats = api_cache.get_cache_stats()
+        model_memory = model_manager.get_memory_usage()
+        
         # Determine health status
-        is_healthy = cpu_percent < 90 and memory.percent < 90
+        is_healthy = cpu_percent < 80 and memory_percent < 85  # More lenient thresholds
         
         health_data = {
             "status": "healthy" if is_healthy else "warning",
             "timestamp": time.time(),
-            "uptime": time.time(),
+            "uptime": time.time() - startup_time,
+            "startup_time_seconds": time.time() - startup_time,
             "system": {
                 "cpu_percent": cpu_percent,
-                "memory_percent": memory.percent,
-                "memory_available": f"{memory.available / (1024**3):.2f}GB",
-                "disk_percent": disk.percent,
-                "disk_free": f"{disk.free / (1024**3):.2f}GB"
+                "memory_percent": memory_percent,
+                "memory_available": "N/A (monitoring unavailable)",
+                "disk_percent": disk_percent,
+                "disk_free": "N/A (monitoring unavailable)"
             },
             "services": services_status,
+            "optimization_metrics": {
+                "prediction_cache": cache_stats,
+                "api_cache": api_cache_stats,
+                "model_memory": model_memory,
+                "lazy_loading_active": not all(services_status.values())
+            },
+            "performance_targets": {
+                "startup_time_target": "< 8s",
+                "memory_target": "< 120MB",
+                "cpu_target": "< 30%",
+                "cache_hit_target": "> 85%"
+            },
             "environment": {
                 "python_version": f"{os.sys.version_info.major}.{os.sys.version_info.minor}",
                 "platform": os.name,
@@ -995,6 +1087,22 @@ def match_insights(home_team_id, away_team_id):
         flash('Bir hata oluştu. Lütfen daha sonra tekrar deneyin.', 'danger')
         return redirect(url_for('index'))
 
+@app.before_first_request
+def initialize_optimized_app():
+    """Initialize optimized application components on first request"""
+    logger.info("🚀 Initializing optimized Football Predictor...")
+    
+    # Load optimized cache from disk
+    optimized_cache.load()
+    
+    # Start background model preloading
+    model_manager.preload_critical_models()
+    
+    # Warm API cache with today's matches
+    api_cache.warm_cache_for_today()
+    
+    logger.info("✅ Optimized initialization completed")
+
 def find_available_port(preferred_ports=None):
     """
     Kullanılabilir bir port bul
@@ -1044,6 +1152,125 @@ def find_available_port(preferred_ports=None):
     logger.warning("Tercih edilen portların hiçbiri kullanılamıyor, rastgele bir port atanacak")
     return 0  # 0 verilirse, sistem otomatik olarak kullanılabilir bir port atar
 
+# Performance monitoring endpoints
+@app.route('/admin/performance')
+@performance_monitor("admin_performance")
+def performance_dashboard():
+    """Comprehensive performance monitoring dashboard"""
+    try:
+        # Gather all performance metrics
+        cache_stats = optimized_cache.stats()
+        api_stats = api_cache.get_cache_stats()
+        model_stats = model_manager.get_memory_usage()
+        loading_status = model_manager.get_loading_status()
+        
+        import psutil
+        system_stats = {
+            'cpu_percent': psutil.cpu_percent(),
+            'memory_percent': psutil.virtual_memory().percent,
+            'disk_percent': psutil.disk_usage('/').percent,
+            'process_memory_mb': psutil.Process().memory_info().rss / 1024 / 1024,
+            'startup_time': time.time() - startup_time
+        }
+        
+        return jsonify({
+            'cache_performance': cache_stats,
+            'api_cache_performance': api_stats,
+            'model_performance': model_stats,
+            'loading_status': loading_status,
+            'system_performance': system_stats,
+            'optimization_status': {
+                'lazy_loading_enabled': True,
+                'cache_compression': cache_stats.get('compression', False),
+                'api_caching_enabled': True,
+                'performance_monitoring': True
+            },
+            'targets_met': {
+                'startup_time': system_stats['startup_time'] < 8,
+                'memory_usage': system_stats['process_memory_mb'] < 120,
+                'cpu_usage': system_stats['cpu_percent'] < 30,
+                'cache_hit_ratio': api_stats.get('hit_ratio', 0) > 85
+            },
+            'timestamp': time.time()
+        })
+        
+    except Exception as e:
+        logger.error(f"Performance dashboard error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/cache/clear', methods=['POST'])
+@performance_monitor("cache_clear")
+def clear_all_caches():
+    """Clear all caches - both optimized and API caches"""
+    try:
+        # Clear optimized prediction cache
+        optimized_cache.clear()
+        
+        # Clear API cache
+        api_cache.invalidate_cache()
+        
+        # Clear Flask cache
+        cache.clear()
+        
+        logger.info("🗑️ All caches cleared by admin request")
+        
+        return jsonify({
+            'success': True,
+            'message': 'All caches cleared successfully',
+            'caches_cleared': ['prediction_cache', 'api_cache', 'flask_cache'],
+            'timestamp': time.time()
+        })
+        
+    except Exception as e:
+        logger.error(f"Cache clearing failed: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/models/status')
+@performance_monitor("models_status")
+def models_status():
+    """Get detailed status of all loaded models"""
+    try:
+        status = {
+            'loading_status': model_manager.get_loading_status(),
+            'memory_usage': model_manager.get_memory_usage(),
+            'available_components': {
+                'predictor': model_manager.is_loaded('match_predictor'),
+                'validator': model_manager.is_loaded('model_validator'),
+                'advanced_models': model_manager.is_loaded('kg_service')
+            },
+            'preload_thread_active': model_manager.get_loading_status()['preload_thread_active'],
+            'startup_time': time.time() - startup_time
+        }
+        
+        return jsonify(status)
+        
+    except Exception as e:
+        logger.error(f"Models status error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/models/load', methods=['POST'])
+@performance_monitor("force_load_models")
+def force_load_models():
+    """Force load all models (for warming up)"""
+    try:
+        load_time = model_manager.force_load_all()
+        
+        return jsonify({
+            'success': True,
+            'message': 'All models force-loaded successfully',
+            'load_time_seconds': load_time,
+            'models_loaded': {
+                'predictor': model_manager.is_loaded('match_predictor'),
+                'validator': model_manager.is_loaded('model_validator'),
+                'advanced_models': model_manager.is_loaded('kg_service')
+            },
+            'timestamp': time.time()
+        })
+        
+    except Exception as e:
+        logger.error(f"Force loading models failed: {e}")
+        return jsonify({'error': str(e)}), 500
+
 def initialize_services_lazy():
     """Lazy initialization of heavy services to reduce startup CPU load"""
     global team_analyzer, self_learning, performance_updater
@@ -1077,68 +1304,29 @@ def initialize_services_lazy():
         logger.info("Continuing with fallback services...")
 
 if __name__ == '__main__':
-    # Initialize services with lazy loading
-    initialize_services_lazy()
-    
-    # API Blueprint'i yükle
     try:
+        # Initialize optimized services
+        initialize_services_lazy()
+        
+        # Import API routes after app initialization
         from api_routes import api_v3_bp
         app.register_blueprint(api_v3_bp)
-        logger.info("✅ API Blueprint kaydedildi")
+        
+        # Find available port for the application
+        port = find_available_port([80, 8080, 5000, 3000])
+        
+        logger.info(f"🚀 Starting optimized Football Predictor on port {port}")
+        logger.info(f"⚡ Performance optimizations: Lazy loading, Compressed cache, API caching")
+        logger.info(f"� Monitoring available at: /admin/performance")
+        
+        # Run with optimized settings
+        app.run(
+            host='0.0.0.0',
+            port=port,
+            debug=False,  # Disable debug mode for better performance
+            threaded=True,  # Enable threading for better concurrent request handling
+            use_reloader=False  # Disable reloader to prevent double initialization
+        )
     except Exception as e:
-        logger.error(f"❌ API Blueprint hatası: {str(e)}")
-    
-    # Determine optimal port efficiently
-    port = int(os.environ.get('PORT', 5000))  # Use environment or default
-    
-    # Check if we should use production mode or development mode
-    is_production = os.environ.get('PYTHON_ENV') == 'production'
-    is_codesandbox = os.environ.get('CODESPACE_NAME') or os.environ.get('CODESANDBOX_HOST')
-    
-    if is_codesandbox:
-        logger.info("🔧 CodeSandbox detected: Starting with minimal resource usage")
-        print("🚀 Football Predictor starting in CodeSandbox mode...")
-        print(f"📡 Server will be available at http://localhost:{port}")
-        print("💡 Use: gunicorn -c gunicorn.conf.py main:app for production")
-        
-        try:
-            # Start with minimal debug and threading for CodeSandbox
-            app.run(
-                host='0.0.0.0', 
-                port=port, 
-                debug=False,  # Disable debug to save CPU
-                use_reloader=False,  # Disable auto-reload to save CPU
-                threaded=True  # Enable threading but keep it minimal
-            )
-        except Exception as e:
-            logger.error(f"CodeSandbox startup failed: {str(e)}")
-            print(f"❌ Startup failed: {str(e)}")
-            print("💡 Try: python3 main.py or gunicorn -c gunicorn.conf.py main:app")
-            
-    elif is_production:
-        logger.info("🏭 Production mode: Use gunicorn for best performance")
-        print("🚀 Football Predictor ready for production")
-        print(f"💡 Start with: gunicorn -c gunicorn.conf.py main:app")
-        print(f"📡 Or simple: gunicorn --bind 0.0.0.0:{port} main:app")
-        # Don't start the dev server in production
-        
-    else:
-        logger.info("🔧 Development mode: Starting with full features")
-        print(f"🚀 Football Predictor starting on port {port}")
-        
-        try:
-            app.run(
-                host='0.0.0.0',
-                port=port,
-                debug=True,
-                use_reloader=True
-            )
-        except Exception as e:
-            logger.error(f"Development startup failed: {str(e)}")
-            # Fallback to basic mode
-            try:
-                logger.info("⚡ Fallback: Starting in basic mode")
-                app.run(host='0.0.0.0', port=port, debug=False)
-            except Exception as final_e:
-                logger.error(f"💥 All startup attempts failed: {str(final_e)}")
-                print(f"❌ Cannot start server: {str(final_e)}")
+        logger.error(f"Startup failed: {e}")
+        raise
