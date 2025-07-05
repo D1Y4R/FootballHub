@@ -424,10 +424,7 @@ def team_stats(team_id):
         return jsonify([])
 
 
-@app.route('/test_half_time_stats')
-def test_half_time_stats():
-    """Test sayfası - İlk yarı/ikinci yarı istatistiklerini test etmek için"""
-    return render_template('half_time_stats_test.html')
+
     
 def get_league_standings(league_id):
     """Get standings for a specific league"""

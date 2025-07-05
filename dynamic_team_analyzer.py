@@ -841,24 +841,5 @@ class DynamicTeamAnalyzer:
         logger.info(f"Takım faktörleri hesaplandı: {len(factors)} takım")
         return factors
 
-# Test ve örnek kullanım
 if __name__ == "__main__":
-    analyzer = DynamicTeamAnalyzer()
-    factors = analyzer.analyze_and_update()
-    
-    # Faktörleri dışa aktar
-    analyzer.export_team_factors_json()
-    
-    # Örnek dinamik faktör uygulaması
-    home_id = "610"  # Galatasaray
-    away_id = "1005" # Fenerbahçe
-    
-    # Orijinal beklenen goller
-    home_goals = 1.8
-    away_goals = 1.2
-    
-    # Dinamik faktörleri uygula
-    adj_home, adj_away = analyzer.apply_dynamic_factors(home_id, away_id, home_goals, away_goals)
-    
-    print(f"Orijinal beklenen goller: Ev {home_goals:.2f}, Deplasman {away_goals:.2f}")
-    print(f"Dinamik faktörlerle: Ev {adj_home:.2f}, Deplasman {adj_away:.2f}")
+    pass
