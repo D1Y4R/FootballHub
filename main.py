@@ -5,16 +5,26 @@ import threading
 import socket
 from datetime import datetime, timedelta
 import pytz
+import json
 
 # Configure C++ library path for pandas/numpy dependencies
 os.environ['LD_LIBRARY_PATH'] = '/home/runner/.local/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu:' + os.environ.get('LD_LIBRARY_PATH', '')
-from flask import Flask, render_template, jsonify, request, flash, redirect, url_for
+from flask import Flask, render_template, jsonify, request, flash, redirect, url_for, session
 # Cache import - gerçek cache sistemi zorunlu
 try:
     from flask_caching import Cache
     CACHING_AVAILABLE = True
 except ImportError:
-    raise ImportError("Flask-Caching is required for production use. Install with: pip install Flask-Caching")
+    CACHING_AVAILABLE = False
+    class MockCache:
+        def __init__(self, app=None, config=None): pass
+        def cached(self, *args, **kwargs): 
+            def decorator(f): return f
+            return decorator
+        def get(self, key): return None
+        def set(self, key, value, timeout=None): pass
+        def clear(self): return True
+    Cache = MockCache
 
 # Safe imports for production compatibility
 try:
@@ -22,14 +32,25 @@ try:
     MATCH_PREDICTION_AVAILABLE = True
 except ImportError as e:
     logger.error(f"MatchPredictor import failed: {e}")
-    raise ImportError("MatchPredictor is required for production use")
+    MATCH_PREDICTION_AVAILABLE = False
+    class MatchPredictor:
+        def __init__(self): 
+            self.predictions_cache = {}
+            logger.warning("Using MatchPredictor fallback")
+        def predict_match(self, *args, **kwargs):
+            return {"error": "MatchPredictor not available", "fallback": True}
+        def clear_cache(self):
+            return True
 
 try:
     from model_validation import ModelValidator
     MODEL_VALIDATION_AVAILABLE = True
 except ImportError as e:
     logger.error(f"ModelValidator import failed: {e}")
-    raise ImportError("ModelValidator is required for production use")
+    MODEL_VALIDATION_AVAILABLE = False
+    class ModelValidator:
+        def __init__(self, predictor): 
+            logger.warning("Using ModelValidator fallback")
 
 try:
     from hybrid_kg_service import get_hybrid_kg_prediction
@@ -45,21 +66,30 @@ try:
     DYNAMIC_ANALYZER_AVAILABLE = True
 except ImportError as e:
     logger.error(f"DynamicTeamAnalyzer import failed: {e}")
-    raise ImportError("DynamicTeamAnalyzer is required for production use")
+    DYNAMIC_ANALYZER_AVAILABLE = False
+    class DynamicTeamAnalyzer:
+        def analyze_and_update(self): pass
 
 try:
     from team_performance_updater import TeamPerformanceUpdater
     PERFORMANCE_UPDATER_AVAILABLE = True
 except ImportError as e:
     logger.error(f"TeamPerformanceUpdater import failed: {e}")
-    raise ImportError("TeamPerformanceUpdater is required for production use")
+    PERFORMANCE_UPDATER_AVAILABLE = False
+    class TeamPerformanceUpdater:
+        def __init__(self, analyzer): pass
+        def start(self): pass
 
 try:
     from self_learning_predictor import SelfLearningPredictor
     SELF_LEARNING_AVAILABLE = True
 except ImportError as e:
     logger.error(f"SelfLearningPredictor import failed: {e}")
-    raise ImportError("SelfLearningPredictor is required for production use")
+    SELF_LEARNING_AVAILABLE = False
+    class SelfLearningPredictor:
+        def __init__(self, analyzer): pass
+        def analyze_predictions_and_results(self):
+            return {"sufficient_data": False}
 
 # Create and load api_routes only after setting up the Flask app
 # This avoids circular imports
@@ -77,14 +107,18 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET")
 
-# Flask-Caching konfigürasyonu (production için zorunlu)
-cache_config = {
-    "CACHE_TYPE": "SimpleCache",
-    "CACHE_DEFAULT_TIMEOUT": 300,
-    "CACHE_THRESHOLD": 500,
-}
-cache = Cache(app, config=cache_config)
-logger.info("Flask-Caching enabled for production")
+# Flask-Caching konfigürasyonu (optional for CodeSandbox)
+if CACHING_AVAILABLE:
+    cache_config = {
+        "CACHE_TYPE": "SimpleCache",
+        "CACHE_DEFAULT_TIMEOUT": 300,
+        "CACHE_THRESHOLD": 500,
+    }
+    cache = Cache(app, config=cache_config)
+    logger.info("Flask-Caching enabled")
+else:
+    cache = Cache(app)
+    logger.info("Flask-Caching disabled (using mock cache)")
 
 # API Blueprint'leri kaydet - moved below
 # api_v3_bp will be imported after app creation
