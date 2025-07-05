@@ -5,11 +5,12 @@ import threading
 import socket
 from datetime import datetime, timedelta
 import pytz
+import json
 
 # Configure C++ library path for pandas/numpy dependencies
 os.environ['LD_LIBRARY_PATH'] = '/home/runner/.local/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu:' + os.environ.get('LD_LIBRARY_PATH', '')
-from flask import Flask, render_template, jsonify, request, flash, redirect, url_for
-# Optional imports for CodeSandbox compatibility
+from flask import Flask, render_template, jsonify, request, flash, redirect, url_for, session
+# Cache import - gerçek cache sistemi zorunlu
 try:
     from flask_caching import Cache
     CACHING_AVAILABLE = True
@@ -24,7 +25,8 @@ except ImportError:
         def set(self, key, value, timeout=None): pass
         def clear(self): return True
     Cache = MockCache
-# Safe imports for CodeSandbox compatibility
+
+# Safe imports for production compatibility
 try:
     from match_prediction import MatchPredictor
     MATCH_PREDICTION_AVAILABLE = True
@@ -1043,13 +1045,13 @@ def find_available_port(preferred_ports=None):
 
 def initialize_services_lazy():
     """Lazy initialization of heavy services to reduce startup CPU load"""
-    global team_analyzer, self_learning, performance_updater
+    global team_analyzer, self_learning_model, performance_updater
     
     logger.info("🚀 Starting Football Predictor with CodeSandbox optimizations...")
     
     # Only initialize critical services on startup
     team_analyzer = None
-    self_learning = None 
+    self_learning_model = None 
     performance_updater = None
     
     # Skip heavy initialization in CodeSandbox to prevent CPU overload

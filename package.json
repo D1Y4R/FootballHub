@@ -12,8 +12,7 @@
     "test": "python3 -c 'import main; print(\"✅ Import test passed\")'",
     "clean": "rm -rf __pycache__ *.pyc .pytest_cache",
     "deps": "pip list | grep -E '(Flask|requests|gunicorn|pytz)'",
-    "health": "curl -f http://localhost:5000/api/health || echo 'Server not running'",
-    "logs": "tail -f *.log 2>/dev/null || echo 'No log files found'"
+    "health": "curl -f http://localhost:5000/api/health || echo 'Server not running'"
   },
   "keywords": [
     "football",

@@ -37,10 +37,6 @@
       "name": "install-minimal",
       "command": "pnpm install-minimal"
     },
-    "test": {
-      "name": "test",
-      "command": "pnpm test"
-    },
     "clean": {
       "name": "clean",
       "command": "pnpm clean"
@@ -52,10 +48,6 @@
     "health": {
       "name": "health",
       "command": "pnpm health"
-    },
-    "logs": {
-      "name": "logs",
-      "command": "pnpm logs"
     }
   }
 }

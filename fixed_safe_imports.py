@@ -8,6 +8,11 @@ import warnings
 import logging
 import os
 
+# Suppress warnings
+warnings.filterwarnings("ignore")
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Environment detection for optimal fallback decisions
@@ -77,7 +82,9 @@ def safe_import_pandas():
         return create_pandas_fallback()
 
 def safe_import_sklearn():
-    """Import sklearn components with proper error handling"""
+    """
+    Scikit-learn import with fallback for CodeSandbox compatibility
+    """
     try:
         # Check if we're in a limited environment - avoid murmurhash issues
         if LIMITED_ENV:
@@ -87,15 +94,17 @@ def safe_import_sklearn():
         from sklearn.ensemble import RandomForestRegressor
         from sklearn.preprocessing import StandardScaler
         from sklearn.model_selection import train_test_split
-        logger.info("Sklearn imported successfully")
+        logger.info("Scikit-learn imported successfully")
         return RandomForestRegressor, StandardScaler, train_test_split
     except (ImportError, AttributeError, ModuleNotFoundError) as e:
-        logger.error(f"Sklearn import failed: {e}")
+        logger.error(f"Scikit-learn import failed: {e}")
         logger.info("Using sklearn fallback implementations")
         return create_sklearn_fallback()
 
 def safe_import_tensorflow():
-    """Import tensorflow with proper error handling"""
+    """
+    TensorFlow import with fallback for CodeSandbox compatibility
+    """
     try:
         # Check if we're in a limited environment - TensorFlow is too large
         if LIMITED_ENV:
@@ -193,6 +202,71 @@ def create_pandas_fallback():
             return list(data) if hasattr(data, '__iter__') else [data]
     
     return PandasFallback()
+
+def safe_import_matplotlib():
+    """
+    Matplotlib import - isteğe bağlı
+    """
+    try:
+        import matplotlib.pyplot as plt
+        import matplotlib
+        matplotlib.use('Agg')  # Non-interactive backend
+        logger.info("Matplotlib successfully imported")
+        return plt
+    except ImportError as e:
+        logger.warning(f"Matplotlib import failed: {e}")
+        return None
+
+def safe_import_seaborn():
+    """
+    Seaborn import - isteğe bağlı
+    """
+    try:
+        import seaborn as sns
+        logger.info("Seaborn successfully imported")
+        return sns
+    except ImportError as e:
+        logger.warning(f"Seaborn import failed: {e}")
+        return None
+
+def safe_import_requests():
+    """
+    Requests import - optional for CodeSandbox compatibility
+    """
+    try:
+        import requests
+        logger.info("Requests successfully imported")
+        return requests
+    except ImportError as e:
+        logger.warning(f"Requests import failed: {e}")
+        logger.warning("API functionality may be limited without requests")
+        return None
+
+def safe_import_flask():
+    """
+    Flask import - optional for CodeSandbox compatibility
+    """
+    try:
+        from flask import Flask
+        logger.info("Flask successfully imported")
+        return Flask
+    except ImportError as e:
+        logger.warning(f"Flask import failed: {e}")
+        logger.warning("Web functionality may be limited without Flask")
+        return None
+
+def safe_import_joblib():
+    """
+    Joblib import - optional for CodeSandbox compatibility
+    """
+    try:
+        import joblib
+        logger.info("Joblib successfully imported")
+        return joblib
+    except ImportError as e:
+        logger.warning(f"Joblib import failed: {e}")
+        logger.warning("Model saving/loading may be limited without joblib")
+        return None
 
 def create_sklearn_fallback():
     """Create functional sklearn fallbacks"""
@@ -445,20 +519,20 @@ def create_tensorflow_fallback():
     
     return TensorFlowFallback()
 
-# Test function to verify imports
-def test_imports():
-    """Test all imports to ensure they work"""
+# Production imports verification
+def verify_production_imports():
+    """Verify that all required imports are available for production"""
     try:
         np = safe_import_numpy()
         pd = safe_import_pandas()
         RandomForestRegressor, StandardScaler, train_test_split = safe_import_sklearn()
         tf = safe_import_tensorflow()
         
-        logger.info("All imports tested successfully")
+        logger.info("All production imports verified successfully")
         return True
     except Exception as e:
-        logger.error(f"Import test failed: {e}")
+        logger.error(f"Production import verification failed: {e}")
         return False
 
 if __name__ == "__main__":
-    pass
+    verify_production_imports()
