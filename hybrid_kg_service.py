@@ -458,12 +458,4 @@ def get_hybrid_kg_prediction(home_team_id, away_team_id, main_home_goals=None, m
     return hybrid_service.predict_kg_var_yok(home_team_id, away_team_id, main_home_goals, main_away_goals)
 
 if __name__ == "__main__":
-    # Test the service
-    result = get_hybrid_kg_prediction("5254", "5248")
-    if result:
-        print(f"Test result: {result['prediction']} - {result['probability']}%")
-        print(f"Components: Poisson={result['components']['poisson']}%, "
-              f"Logistic={result['components']['logistic']}%, "
-              f"Historical={result['components']['historical']}%")
-    else:
-        print("Test failed")
+    pass
