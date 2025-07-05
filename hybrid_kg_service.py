@@ -326,12 +326,12 @@ class HybridKGService:
         goal_consistency = 1.0 - abs(home_performance['avg_goals_scored'] - away_performance['avg_goals_scored']) / 3.0
         goal_consistency = max(0.3, goal_consistency)
         
-        if form_quality > 0.7:  # Yüksek form - logistic daha güvenilir
-            return {'poisson': 0.25, 'logistic': 0.5, 'historical': 0.25}
+        if form_quality > 0.7:  # Yüksek form - daha dengeli dağıtım
+            return {'poisson': 0.35, 'logistic': 0.4, 'historical': 0.25}
         elif goal_consistency > 0.7:  # Tutarlı goller - poisson daha güvenilir  
             return {'poisson': 0.5, 'logistic': 0.3, 'historical': 0.2}
-        else:  # Dengeli durumlar
-            return {'poisson': 0.35, 'logistic': 0.35, 'historical': 0.3}
+        else:  # Dengeli durumlar - logistic dominantlığını azalt
+            return {'poisson': 0.4, 'logistic': 0.3, 'historical': 0.3}
     
     def _apply_dynamic_adjustments(self, base_prob, home_performance, away_performance):
         """Dinamik düzeltme faktörleri uygula"""

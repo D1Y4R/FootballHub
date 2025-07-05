@@ -3918,30 +3918,68 @@ class MatchPredictor:
         btts_yes_prob = both_teams_scored_prob
         btts_no_prob = 1 - both_teams_scored_prob
         
-        # HİBRİT SİSTEM SONUCUNU KULLAN
+        # INTELLIGENT OVERRIDE SİSTEMİ - Monte Carlo vs Hibrit çelişkisi çözümü
         if hybrid_kg_result is not None:
-            # Hibrit sistem sonucunu direkt kullan
             hybrid_prob = hybrid_kg_result['probability'] / 100
-            bet_predictions['both_teams_to_score'] = hybrid_kg_result['prediction']
-            kg_var_adjusted_prob = hybrid_prob  # Override the forced correction value
-            logger.info(f">>> HİBRİT SİSTEM SONUCU KULLANILIYOR <<<: {hybrid_kg_result['prediction']} - %{hybrid_kg_result['probability']}")
+            hybrid_prediction = hybrid_kg_result['prediction']
+            
+            # Monte Carlo simülasyonundan gelen BTTS tahminini hesapla
+            monte_carlo_kg = "KG VAR" if btts_yes_prob > btts_no_prob else "KG YOK"
+            monte_carlo_kg_prob = btts_yes_prob if monte_carlo_kg == "KG VAR" else btts_no_prob
+            
+            # Çelişki var mı kontrol et
+            if monte_carlo_kg != hybrid_prediction:
+                logger.warning(f"ÇELIŞKI TESPİT EDİLDİ: Monte Carlo={monte_carlo_kg} (%{monte_carlo_kg_prob*100:.1f}) vs Hibrit={hybrid_prediction} (%{hybrid_kg_result['probability']})")
+                
+                # Güven skorlarını hesapla
+                monte_carlo_confidence = abs(btts_yes_prob - btts_no_prob) * 100  # Fark ne kadar büyükse o kadar güvenilir
+                hybrid_confidence = hybrid_kg_result['probability'] if hybrid_prediction == "KG VAR" else (100 - hybrid_kg_result['probability'])
+                
+                # Override kriterleri
+                monte_carlo_threshold = 65.0  # %65'in üzerinde Monte Carlo güven varsa öncelikle
+                hybrid_threshold = 75.0       # %75'in üzerinde hibrit güven varsa hibrit'i öncelikle
+                
+                if monte_carlo_confidence > monte_carlo_threshold and monte_carlo_kg_prob > 0.6:
+                    # Monte Carlo daha güvenilir
+                    logger.info(f"Monte Carlo daha güvenilir (güven: {monte_carlo_confidence:.1f}%), Monte Carlo tahmini kullanılacak")
+                    bet_predictions['both_teams_to_score'] = monte_carlo_kg
+                    kg_var_adjusted_prob = btts_yes_prob
+                elif hybrid_confidence > hybrid_threshold:
+                    # Hibrit sistem daha güvenilir
+                    logger.info(f"Hibrit sistem daha güvenilir (güven: {hybrid_confidence:.1f}%), hibrit tahmini kullanılacak")
+                    bet_predictions['both_teams_to_score'] = hybrid_prediction
+                    kg_var_adjusted_prob = hybrid_prob
+                else:
+                    # Orta yol - ağırlıklı ortalama (güven skorlarına göre ağırlık)
+                    total_confidence = monte_carlo_confidence + hybrid_confidence
+                    mc_weight = monte_carlo_confidence / total_confidence if total_confidence > 0 else 0.5
+                    hybrid_weight = hybrid_confidence / total_confidence if total_confidence > 0 else 0.5
+                    
+                    avg_btts_prob = (btts_yes_prob * mc_weight) + (hybrid_prob * hybrid_weight)
+                    final_kg_prediction = "KG VAR" if avg_btts_prob >= 0.5 else "KG YOK"
+                    
+                    logger.info(f"Orta yol çözümü: Ağırlıklı ortalama {final_kg_prediction} (%{avg_btts_prob*100:.1f}) - MC ağırlık:{mc_weight:.2f}, Hibrit ağırlık:{hybrid_weight:.2f}")
+                    bet_predictions['both_teams_to_score'] = final_kg_prediction
+                    kg_var_adjusted_prob = avg_btts_prob
+            else:
+                # Çelişki yok - hibrit tahmini kullan
+                logger.info(f"Monte Carlo ve hibrit sistem uyumlu: {hybrid_prediction}")
+                bet_predictions['both_teams_to_score'] = hybrid_prediction
+                kg_var_adjusted_prob = hybrid_prob
+                
+            logger.info(f">>> HİBRİT SİSTEM SONUCU <<<: {hybrid_prediction} - %{hybrid_kg_result['probability']}")
             logger.info(f"Hibrit bileşenler - Poisson: %{hybrid_kg_result['components']['poisson']}, "
                        f"Logistic: %{hybrid_kg_result['components']['logistic']}, "
                        f"Historical: %{hybrid_kg_result['components']['historical']}")
+            logger.info(f"Final KG tahmini: {bet_predictions['both_teams_to_score']} (%{kg_var_adjusted_prob*100:.1f})")
         else:
-            # Fallback sistem - KG VAR/YOK tahminini zorla düzeltme sistemi ile uyumlu hale getir
+            # Fallback sistem - Monte Carlo sonuçlarını kullan
             if kg_var_adjusted_prob > 0.5:
                 bet_predictions['both_teams_to_score'] = 'KG VAR'
                 logger.info(f"Fallback sistem KG VAR tahmini: %{kg_var_adjusted_prob*100:.1f}")
             else:
                 bet_predictions['both_teams_to_score'] = 'KG YOK' 
                 logger.info(f"Fallback sistem KG YOK tahmini: %{(1-kg_var_adjusted_prob)*100:.1f}")
-        
-        # Simülasyon sonuçları ile uyumsuzluk kontrolü (sadece bilgi amaçlı)
-        if btts_yes_prob > btts_no_prob:
-            logger.info(f"Not: Simülasyon KG VAR öneriyor (%{btts_yes_prob*100:.1f}) ama hesaplanan değer kullanılıyor")
-        else:
-            logger.info(f"Not: Simülasyon KG YOK öneriyor (%{btts_no_prob*100:.1f}) ama hesaplanan değer kullanılıyor")
         
         # 2.5 ve 3.5 ÜST/ALT tahminleri zaten satır 3808-3809'da Monte Carlo temel alınarak belirlendi
         # Burada tekrar override edilmeyecek - gerçek Monte Carlo sonuçları korunacak

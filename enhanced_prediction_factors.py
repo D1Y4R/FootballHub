@@ -450,8 +450,8 @@ class EnhancedPredictionFactors:
         score_counter = Counter(scores)
         most_common_scores = score_counter.most_common(3)  # En yaygın 3 skor
         
-        # Ortalama skorları hesapla
-        num_matches = len(scores)
+        # Ortalama skorları hesapla - güvenli kontrol
+        num_matches = len(scores) if scores else 0
         avg_home_goals = total_home_goals / num_matches if num_matches > 0 else 0
         avg_away_goals = total_away_goals / num_matches if num_matches > 0 else 0
         
