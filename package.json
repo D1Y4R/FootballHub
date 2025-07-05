@@ -1,27 +1,21 @@
 {
   "name": "football-predictor",
   "version": "1.0.0",
-  "description": "Advanced Football Match Prediction System - Optimized for CodeSandbox",
+  "description": "Advanced Football Match Prediction System",
   "main": "main.py",
   "scripts": {
     "start": "bash start.sh",
     "dev": "python3 main.py",
     "production": "gunicorn -c gunicorn.conf.py main:app",
     "install": "pip install -r requirements.txt --no-cache-dir",
-    "install-minimal": "pip install Flask==3.0.0 requests==2.31.0 pytz==2023.3 gunicorn==21.2.0",
-    "test": "python3 -c 'import main; print(\"✅ Import test passed\")'",
-    "clean": "rm -rf __pycache__ *.pyc .pytest_cache",
-    "deps": "pip list | grep -E '(Flask|requests|gunicorn|pytz)'",
-    "health": "curl -f http://localhost:5000/api/health || echo 'Server not running'",
-    "logs": "tail -f *.log 2>/dev/null || echo 'No log files found'"
+    "clean": "rm -rf __pycache__ *.pyc"
   },
   "keywords": [
     "football",
     "prediction",
     "machine-learning",
     "flask",
-    "api",
-    "codesandbox"
+    "api"
   ],
   "author": "Football Predictor Team",
   "license": "MIT",
@@ -31,12 +25,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/D1Y4R/FootballHub"
-  },
-  "codesandbox": {
-    "start": "bash start.sh",
-    "environment": "python",
-    "cpu": 1,
-    "memory": 2048
   },
   "devDependencies": {},
   "dependencies": {}
